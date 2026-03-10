@@ -44,7 +44,7 @@ init_db()
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     """Основная клавиатура с кнопкой Web App"""
     builder = ReplyKeyboardBuilder()
-    builder.button(text="🎮 Играть в Rocket", web_app=WebAppInfo(url=WEB_APP_URL))
+    builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=WEB_APP_URL))
     builder.button(text="🎰 Казино")
     builder.button(text="📊 Моя статистика")
     builder.button(text="💰 Баланс")
@@ -90,10 +90,11 @@ async def cmd_start(message: Message):
 async def cmd_play(message: Message):
     """Команда /play - открыть игру"""
     await message.answer(
-        "🎮 <b>Запускаю Rocket Game...</b>\n\n"
-        "🚀 Удачи!",
+        "🎮 <b>BFG Casino — Web App</b>\n\n"
+        "🚀 Ракета · 💣 Сапер\n"
+        "Выбирай игру и испытай удачу!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎰 Открыть игру", web_app=WebAppInfo(url=WEB_APP_URL))]
+            [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL))]
         ]),
         parse_mode='HTML'
     )
@@ -105,13 +106,14 @@ async def cmd_help(message: Message):
     """Команда /help - справка"""
     help_text = (
         "📖 <b>Справка по BFG Casino</b>\n\n"
-        "🎮 <b>Игры:</b>\n"
-        "🚀 <b>Rocket</b> - играй в Web App, забирай выигрыш до краша\n"
-        "🎰 <b>Казино</b> - используй /casino <ставка>\n\n"
+        "🎮 <b>Игры в приложении:</b>\n"
+        "🚀 <b>Ракета</b> — забирай выигрыш до краша, множитель растёт\n"
+        "💣 <b>Сапер</b> — открывай ячейки, избегай мин, множитель растёт\n"
+        "🎰 <b>Казино</b> — быстрая игра прямо в боте\n\n"
         "💰 <b>Команды:</b>\n"
         "/start - Запустить бота\n"
-        "/play - Открыть игру\n"
-        "/casino - Игра в казино\n"
+        "/play - Открыть игровое приложение\n"
+        "/casino - Игра в казино (<ставка>)\n"
         "/balance - Проверить баланс\n"
         "/stats - Моя статистика\n"
         "/history - История игр\n"

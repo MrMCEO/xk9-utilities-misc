@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BFG</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+/* ═══════════════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════════════ */
+:root {
+    --brand:      #3d5afe;
+    --brand2:     #2840cc;
+    --brand-lo:   rgba(61,90,254,0.12);
+    --brand-mid:  rgba(61,90,254,0.24);
+    --brand-hi:   rgba(61,90,254,0.48);
+    --gold:       #f5a623;
+    --gold-lo:    rgba(245,166,35,0.15);
+    --green:      #00e676;
+    --green-lo:   rgba(0,230,118,0.12);
+    --red:        #ff4455;
+    --red-lo:     rgba(255,68,85,0.12);
+    --r:          12px;
+    --r-lg:       16px;
+    --head-h:     56px;
+    --tab-h:      46px;
+    --tr:         background .28s, color .28s, border-color .28s, box-shadow .28s;
+}
+
+/* DARK */
+[data-theme="dark"] {
+    --bg:        #09091f;
+    --bg2:       #0f0f28;
+    --card:      rgba(255,255,255,0.042);
+    --card2:     rgba(255,255,255,0.07);
+    --border:    rgba(255,255,255,0.07);
+    --text:      #e2e2ff;
+    --muted:     #6060a0;
+    --input-bg:  rgba(255,255,255,0.055);
+    --shadow:    0 6px 26px rgba(0,0,0,0.55);
+    --dot:       rgba(61,90,254,0.09);
+}
+
+/* LIGHT */
+[data-theme="light"] {
+    --bg:        #dae8ff;
+    --bg2:       #c6d8f8;
+    --card:      rgba(255,255,255,0.60);
+    --card2:     rgba(255,255,255,0.88);
+    --border:    rgba(61,90,254,0.13);
+    --text:      #16163e;
+    --muted:     #5858a0;
+    --input-bg:  rgba(255,255,255,0.80);
+    --shadow:    0 4px 20px rgba(61,90,200,0.14);
+    --dot:       rgba(61,90,254,0.07);
+}
+
+/* ═══════════════════════════════════════════════════
+   RESET
+═══════════════════════════════════════════════════ */
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: var(--tr);
+}
+
+body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+    background-size: 26px 26px;
+    pointer-events:none; z-index:0;
+    transition: var(--tr);
+}
+
+body>* { position:relative; z-index:1; }
+
+/* ═══════════════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════════════ */
+.header {
+    height: var(--head-h);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    z-index: 50;
+    transition: var(--tr);
+}
+
+.logo {
+    font-size: 21px;
+    font-weight: 900;
+    color: var(--brand);
+    letter-spacing: -0.5px;
+}
+
+.header-right { display:flex; align-items:center; gap:10px; }
+
+.balance-block { text-align:right; }
+
+.bal-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.3px;
+    color: var(--muted);
+    margin-bottom: 1px;
+    transition: var(--tr);
+}
+
+.bal-val {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--gold);
+    letter-spacing: -.5px;
+    font-variant-numeric: tabular-nums;
+    transition: color .25s;
+}
+
+.bal-val.fu { animation: fu .45s ease; }
+.bal-val.fd { animation: fd .45s ease; }
+
+@keyframes fu { 50% { color:#ffe066; transform:scale(1.07); } }
+@keyframes fd { 50% { color:var(--red);  transform:scale(0.95); } }
+
+.theme-btn {
+    width:34px; height:34px; border-radius:50%;
+    border:1.5px solid var(--border);
+    background:var(--card);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px;
+    transition:var(--tr), transform .18s;
+    color:var(--text);
+}
+.theme-btn:active { transform:scale(0.84) rotate(25deg); }
+
+/* ═══════════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════════ */
+.tab-bar {
+    height:var(--tab-h);
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:0 14px;
+    background:var(--bg2);
+    border-bottom:1px solid var(--border);
+    transition:var(--tr);
+}
+
+.tab-btn {
+    display:flex; align-items:center; gap:5px;
+    padding:6px 15px;
+    border-radius:20px;
+    border:1.5px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    font-size:13px; font-weight:700;
+    cursor:pointer;
+    transition:var(--tr), transform .12s;
+}
+.tab-btn .ti { font-size:14px; line-height:1; }
+.tab-btn.active {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    color:var(--brand);
+    box-shadow:0 0 12px var(--brand-mid);
+}
+.tab-btn:active { transform:scale(0.92); }
+
+/* ═══════════════════════════════════════════════════
+   MAIN
+═══════════════════════════════════════════════════ */
+main { flex:1; overflow:hidden; position:relative; }
+
+.screen {
+    position:absolute; inset:0;
+    overflow-y:auto; overflow-x:hidden;
+    padding:12px 12px 22px;
+    opacity:0; pointer-events:none;
+    transform:translateX(20px);
+    transition:opacity .2s ease, transform .2s ease;
+}
+.screen.active { opacity:1; pointer-events:auto; transform:translateX(0); }
+.screen::-webkit-scrollbar { width:2px; }
+.screen::-webkit-scrollbar-thumb { background:var(--brand-lo); border-radius:2px; }
+
+/* ═══════════════════════════════════════════════════
+   CARDS
+═══════════════════════════════════════════════════ */
+.card {
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:var(--r);
+    padding:12px;
+    margin-bottom:10px;
+    backdrop-filter:blur(12px);
+    transition:var(--tr);
+}
+[data-theme="dark"]  .card { box-shadow:inset 0 1px 0 rgba(255,255,255,0.05); }
+[data-theme="light"] .card { box-shadow:0 2px 10px rgba(61,90,200,0.07); }
+
+.sec-label {
+    font-size:10px; font-weight:700;
+    text-transform:uppercase; letter-spacing:1.5px;
+    color:var(--muted); margin-bottom:9px;
+    transition:var(--tr);
+}
+
+/* ═══════════════════════════════════════════════════
+   BET INPUT
+═══════════════════════════════════════════════════ */
+.bet-input {
+    width:100%; padding:11px 14px;
+    background:var(--input-bg);
+    border:1.5px solid var(--border);
+    border-radius:10px;
+    color:var(--text); font-size:18px; font-weight:700;
+    outline:none; margin-bottom:9px;
+    transition:var(--tr), box-shadow .2s;
+    font-variant-numeric:tabular-nums;
+}
+.bet-input:focus { border-color:var(--brand-hi); box-shadow:0 0 0 3px var(--brand-lo); }
+.bet-input:disabled { opacity:.35; }
+
+.quick-bets { display:grid; grid-template-columns:repeat(6,1fr); gap:5px; }
+
+.qb {
+    padding:8px 2px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:7px;
+    color:var(--text); font-size:11px; font-weight:700;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .1s;
+}
+.qb:active { background:var(--brand-lo); border-color:var(--brand-hi); transform:scale(0.87); }
+
+/* ═══════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════ */
+.btn {
+    width:100%; padding:14px;
+    border:none; border-radius:var(--r);
+    font-size:14px; font-weight:800;
+    text-transform:uppercase; letter-spacing:1px;
+    cursor:pointer;
+    transition:transform .13s, box-shadow .18s, opacity .18s;
+    overflow:hidden; position:relative;
+}
+.btn::after { content:''; position:absolute; inset:0; background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.14) 50%,transparent 60%); transform:translateX(-100%); }
+.btn:active:not(:disabled)::after { transform:translateX(100%); transition:transform .35s ease; }
+.btn:active:not(:disabled) { transform:scale(0.978); }
+.btn:disabled { opacity:.35; cursor:not-allowed; }
+
+.btn-brand { background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff; box-shadow:0 4px 20px var(--brand-mid); }
+.btn-green { background:linear-gradient(135deg,#00c96a,#009950); color:#001a0d; box-shadow:0 4px 20px rgba(0,185,100,0.30); }
+
+/* ═══════════════════════════════════════════════════
+   ROCKET — HISTORY STRIP
+═══════════════════════════════════════════════════ */
+.history-strip { display:flex; gap:5px; overflow-x:auto; padding-bottom:9px; scrollbar-width:none; }
+.history-strip::-webkit-scrollbar { display:none; }
+
+.h-chip {
+    padding:4px 11px; border-radius:18px;
+    font-size:11px; font-weight:700;
+    white-space:nowrap; flex-shrink:0;
+    border:1px solid transparent; transition:var(--tr);
+}
+.h-chip.w { background:var(--green-lo); color:var(--green); border-color:rgba(0,230,118,0.22); }
+.h-chip.l { background:var(--red-lo);   color:var(--red);   border-color:rgba(255,68,85,0.22); }
+
+/* ═══════════════════════════════════════════════════
+   ROCKET GAME STAGE (canvas-driven)
+═══════════════════════════════════════════════════ */
+.game-stage {
+    position:relative;
+    height:200px;
+    border-radius:var(--r-lg);
+    background:var(--card);
+    border:1px solid var(--border);
+    overflow:hidden;
+    margin-bottom:10px;
+    transition:var(--tr);
+}
+
+[data-theme="dark"]  .game-stage { background:#050514; border-color:rgba(61,90,254,0.2); }
+[data-theme="light"] .game-stage { box-shadow:0 4px 20px rgba(61,90,200,0.10); }
+
+#rCanvas {
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    display:block;
+}
+
+.stage-info {
+    position:absolute; top:12px; left:0; right:0;
+    text-align:center; z-index:3; pointer-events:none;
+}
+
+.mult-display {
+    font-size:52px; font-weight:900; letter-spacing:-2px;
+    color:var(--brand);
+    text-shadow:0 0 36px var(--brand-mid);
+    line-height:1;
+    font-variant-numeric:tabular-nums;
+    transition:color .3s, text-shadow .3s;
+}
+.mult-display.crashed {
+    color:var(--red);
+    text-shadow:0 0 36px var(--red-lo);
+    animation:shake .4s ease;
+}
+@keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-8px)}
+    40%{transform:translateX(8px)}
+    60%{transform:translateX(-5px)}
+    80%{transform:translateX(5px)}
+}
+
+.game-hint {
+    font-size:11px; color:var(--muted);
+    margin-top:6px; transition:var(--tr);
+}
+
+/* Rocket emoji — absolutely positioned in stage */
+.rocket-emoji {
+    position:absolute; z-index:4;
+    font-size:26px; line-height:1;
+    transform-origin:50% 50%;
+    pointer-events:none;
+    filter:drop-shadow(0 0 8px rgba(61,90,254,0.6));
+    transition:filter .3s;
+}
+
+/* ═══════════════════════════════════════════════════
+   MINESWEEPER
+═══════════════════════════════════════════════════ */
+.mine-stats {
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap:7px; margin-bottom:10px;
+}
+
+.stat-chip {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:var(--r); padding:9px 6px;
+    text-align:center; transition:var(--tr);
+    backdrop-filter:blur(8px);
+}
+[data-theme="dark"]  .stat-chip { box-shadow:inset 0 1px 0 rgba(255,255,255,0.04); }
+[data-theme="light"] .stat-chip { box-shadow:0 2px 8px rgba(61,90,200,0.06); }
+
+.stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:3px; transition:var(--tr); }
+
+.stat-val {
+    font-size:20px; font-weight:800; color:var(--brand);
+    line-height:1; font-variant-numeric:tabular-nums;
+    transition:color .22s, transform .22s;
+}
+.stat-val.pop { animation:vPop .32s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes vPop { 0%{transform:scale(1)} 50%{transform:scale(1.35);color:var(--gold)} 100%{transform:scale(1)} }
+
+/* Mine count row */
+.mine-count-row {
+    display:flex; gap:8px; align-items:stretch;
+    margin-bottom:9px;
+}
+
+.mine-opts { display:flex; gap:6px; flex:1; }
+
+.mine-opt {
+    flex:1; padding:10px 3px;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    color:var(--muted); font-size:12px; font-weight:700;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .1s;
+}
+.mine-opt.sel {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    color:var(--brand);
+    box-shadow:0 0 10px var(--brand-mid);
+}
+.mine-opt:active { transform:scale(0.91); }
+
+.mine-manual-wrap {
+    display:flex; align-items:center;
+    background:var(--input-bg);
+    border:1.5px solid var(--border);
+    border-radius:9px; padding:0 10px;
+    gap:4px; min-width:80px;
+}
+.mine-manual-icon { font-size:13px; }
+.mine-manual {
+    width:36px;
+    background:transparent; border:none;
+    color:var(--text); font-size:16px; font-weight:700;
+    outline:none; text-align:center;
+    font-variant-numeric:tabular-nums;
+}
+
+/* 6×6 Grid */
+.mine-grid {
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:5px; margin-bottom:10px;
+}
+
+.m-cell {
+    aspect-ratio:1; border-radius:9px;
+    background:var(--card); border:1px solid var(--border);
+    cursor:default;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0;
+    transition:background .13s, border-color .13s, transform .11s, box-shadow .13s;
+    position:relative; overflow:hidden; user-select:none;
+}
+.m-cell::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:42%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.06),transparent);
+    border-radius:inherit; pointer-events:none;
+}
+
+.mine-grid.playing .m-cell.hidden { cursor:pointer; }
+.mine-grid.playing .m-cell.hidden:hover {
+    transform:scale(0.9);
+    background:var(--brand-lo); border-color:var(--brand-hi);
+    box-shadow:0 0 14px var(--brand-mid);
+}
+.mine-grid.playing .m-cell.hidden:active { transform:scale(0.82); }
+
+.m-cell.safe {
+    background:var(--green-lo); border-color:rgba(0,230,118,0.42);
+    box-shadow:0 0 12px rgba(0,230,118,0.13);
+    font-size:20px; animation:rSafe .32s cubic-bezier(0.34,1.56,0.64,1);
+}
+.m-cell.mine-hit {
+    background:var(--red-lo); border-color:rgba(255,68,85,0.6);
+    box-shadow:0 0 22px rgba(255,68,85,0.35);
+    font-size:20px; animation:rBoom .44s ease;
+}
+.m-cell.mine-show {
+    background:rgba(255,68,85,0.07); border-color:rgba(255,68,85,0.25);
+    font-size:18px; opacity:.55;
+}
+
+@keyframes rSafe {
+    0%{transform:scale(0.4) rotate(-18deg);opacity:0}
+    65%{transform:scale(1.14) rotate(4deg)}
+    100%{transform:scale(1) rotate(0);opacity:1}
+}
+@keyframes rBoom {
+    0%{transform:scale(1)}
+    25%{transform:scale(1.45)}
+    55%{transform:scale(0.87)}
+    80%{transform:scale(1.12)}
+    100%{transform:scale(1)}
+}
+
+.next-hint {
+    text-align:center; font-size:11px; color:var(--muted);
+    margin-bottom:9px; transition:var(--tr);
+}
+.next-hint b { color:var(--brand); font-weight:800; }
+
+/* ═══════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════ */
+.modal-ov {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.78);
+    backdrop-filter:blur(14px);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; opacity:0; pointer-events:none;
+    transition:opacity .24s;
+}
+.modal-ov.open { opacity:1; pointer-events:auto; }
+
+.modal-box {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:20px; padding:26px 20px;
+    text-align:center; width:82%; max-width:310px;
+    transform:scale(0.8) translateY(20px);
+    transition:transform .32s cubic-bezier(0.34,1.56,0.64,1), var(--tr);
+    box-shadow:var(--shadow);
+}
+[data-theme="dark"] .modal-box { box-shadow:0 24px 72px rgba(0,0,0,0.65), 0 0 36px var(--brand-lo); }
+.modal-ov.open .modal-box { transform:scale(1) translateY(0); }
+
+.modal-emoji  { font-size:62px; margin-bottom:12px; line-height:1; }
+.modal-title  { font-size:24px; font-weight:900; margin-bottom:5px; }
+.modal-sub    { font-size:12px; color:var(--muted); margin-bottom:4px; transition:var(--tr); }
+.modal-amt    { font-size:36px; font-weight:900; letter-spacing:-1px; margin:5px 0 20px; font-variant-numeric:tabular-nums; }
+.modal-amt.win  { color:var(--green); }
+.modal-amt.lose { color:var(--red); }
+
+.modal-cta {
+    width:100%; padding:13px; border:none; border-radius:10px;
+    font-size:14px; font-weight:800; cursor:pointer;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff; letter-spacing:.5px;
+    box-shadow:0 4px 18px var(--brand-mid);
+    transition:transform .13s;
+}
+.modal-cta:active { transform:scale(0.97); }
+
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="logo">BFG</div>
+    <div class="header-right">
+        <div class="balance-block">
+            <div class="bal-label">Баланс</div>
+            <div class="bal-val" id="balVal">$1 000 000</div>
+        </div>
+        <button class="theme-btn" id="themeBtn">🌙</button>
+    </div>
+</header>
+
+<!-- TABS -->
+<div class="tab-bar">
+    <button class="tab-btn active" data-tab="rocket"><span class="ti">🚀</span> Ракета</button>
+    <button class="tab-btn"        data-tab="mine">  <span class="ti">💣</span> Сапер</button>
+</div>
+
+<main>
+
+<!-- ══════════ ROCKET ══════════ -->
+<section id="screenRocket" class="screen active">
+
+    <div class="history-strip" id="rHistory"></div>
+
+    <div class="game-stage">
+        <canvas id="rCanvas"></canvas>
+        <div class="stage-info">
+            <div class="mult-display" id="rMult">x1.00</div>
+            <div class="game-hint"    id="rHint">Сделайте ставку и запускайте</div>
+        </div>
+        <!-- Rocket emoji — positioned by JS -->
+        <div class="rocket-emoji" id="rRocket">🚀</div>
+    </div>
+
+    <div class="card">
+        <div class="sec-label">Ставка</div>
+        <input type="number" class="bet-input" id="rBetInput" value="100" min="1">
+        <div class="quick-bets">
+            <button class="qb" data-v="50">50</button>
+            <button class="qb" data-v="100">100</button>
+            <button class="qb" data-v="500">500</button>
+            <button class="qb" data-v="1000">1K</button>
+            <button class="qb" data-v="5000">5K</button>
+            <button class="qb" data-v="10000">10K</button>
+        </div>
+    </div>
+
+    <button class="btn btn-brand" id="rActionBtn">Сделать ставку</button>
+
+</section>
+
+<!-- ══════════ MINESWEEPER ══════════ -->
+<section id="screenMine" class="screen">
+
+    <div class="mine-stats">
+        <div class="stat-chip">
+            <div class="stat-lbl">Множитель</div>
+            <div class="stat-val" id="mMult">x1.00</div>
+        </div>
+        <div class="stat-chip">
+            <div class="stat-lbl">Открыто</div>
+            <div class="stat-val" id="mOpened">0</div>
+        </div>
+        <div class="stat-chip">
+            <div class="stat-lbl">Мины</div>
+            <div class="stat-val" id="mMinesBadge">6</div>
+        </div>
+    </div>
+
+    <div class="mine-grid" id="mGrid"></div>
+
+    <div class="next-hint" id="mNextHint" style="display:none">
+        Следующая: <b id="mNextVal">x0.00</b>
+    </div>
+
+    <!-- Pre-game -->
+    <div id="mSettings">
+        <div class="card">
+            <div class="sec-label">Количество мин (поле 6×6, макс. 30)</div>
+            <div class="mine-count-row">
+                <div class="mine-opts">
+                    <button class="mine-opt"     data-m="5">5</button>
+                    <button class="mine-opt sel" data-m="6">6</button>
+                    <button class="mine-opt"     data-m="10">10</button>
+                    <button class="mine-opt"     data-m="16">16</button>
+                </div>
+                <div class="mine-manual-wrap">
+                    <span class="mine-manual-icon">💣</span>
+                    <input type="number" class="mine-manual" id="mMineInput" value="6" min="1" max="30">
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="sec-label">Ставка</div>
+            <input type="number" class="bet-input" id="mBetInput" value="100" min="1">
+            <div class="quick-bets">
+                <button class="qb" data-v="50">50</button>
+                <button class="qb" data-v="100">100</button>
+                <button class="qb" data-v="500">500</button>
+                <button class="qb" data-v="1000">1K</button>
+                <button class="qb" data-v="5000">5K</button>
+                <button class="qb" data-v="10000">10K</button>
+            </div>
+        </div>
+        <button class="btn btn-brand" id="mStartBtn">💣 Начать игру</button>
+    </div>
+
+    <!-- In-game -->
+    <div id="mGamePanel" style="display:none">
+        <button class="btn btn-green" id="mCashoutBtn">💎 Забрать выигрыш</button>
+    </div>
+
+</section>
+</main>
+
+<!-- MODAL -->
+<div class="modal-ov" id="modal">
+    <div class="modal-box">
+        <div class="modal-emoji" id="mEmoji">🎉</div>
+        <div class="modal-title" id="mTitle">Победа!</div>
+        <div class="modal-sub"   id="mSub"></div>
+        <div class="modal-amt"   id="mAmt">+$0</div>
+        <button class="modal-cta" id="mCloseBtn">Продолжить</button>
+    </div>
+</div>
+
+<script>
+/* ════════════════════════════════════
+   TELEGRAM
+════════════════════════════════════ */
+const tg     = window.Telegram?.WebApp || {};
+const tgUser = tg.initDataUnsafe?.user || {};
+if (tg.ready) { tg.ready(); tg.expand(); }
+function haptic(t)  { try { tg.HapticFeedback?.impactOccurred(t||'light'); }       catch(e){} }
+function hNotify(t) { try { tg.HapticFeedback?.notificationOccurred(t||'success'); } catch(e){} }
+
+/* ════════════════════════════════════
+   THEME
+════════════════════════════════════ */
+const html = document.documentElement;
+function applyTheme(t) {
+    html.setAttribute('data-theme', t);
+    document.getElementById('themeBtn').textContent = t === 'dark' ? '🌙' : '☀️';
+    try { localStorage.setItem('bfg_theme', t); } catch(e) {}
+}
+(function(){
+    let s; try { s = localStorage.getItem('bfg_theme'); } catch(e){}
+    applyTheme(s || tg.colorScheme || 'dark');
+})();
+document.getElementById('themeBtn').addEventListener('click', () => {
+    applyTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    haptic('light');
+});
+
+/* ════════════════════════════════════
+   BALANCE
+════════════════════════════════════ */
+let balance = 1_000_000;
+const balEl = document.getElementById('balVal');
+
+function fmtFull(v)  { return '$' + Math.abs(v).toLocaleString('ru-RU', {maximumFractionDigits:2}); }
+function fmtShort(v) {
+    if (v >= 1_000_000) return '$' + (v/1_000_000).toFixed(2) + 'M';
+    return '$' + Math.round(v).toLocaleString('ru-RU');
+}
+
+function changeBalance(delta) {
+    balance += delta;
+    balEl.textContent = fmtShort(balance);
+    balEl.classList.remove('fu','fd');
+    void balEl.offsetWidth;
+    balEl.classList.add(delta >= 0 ? 'fu' : 'fd');
+}
+
+function sendResult(game, stake, won, winnings, profit, mult) {
+    try {
+        tg.sendData && tg.sendData(JSON.stringify({
+            type:'game_result', game, stake, won,
+            winnings, profit, multiplier:mult, user:tgUser
+        }));
+    } catch(e) {}
+}
+
+/* ════════════════════════════════════
+   MODAL
+════════════════════════════════════ */
+function openModal(emoji, title, sub, amount, isWin) {
+    document.getElementById('mEmoji').textContent = emoji;
+    document.getElementById('mTitle').textContent = title;
+    document.getElementById('mSub').textContent   = sub;
+    const a = document.getElementById('mAmt');
+    a.textContent = amount;
+    a.className   = 'modal-amt ' + (isWin===true?'win':isWin===false?'lose':'');
+    document.getElementById('modal').classList.add('open');
+    if (isWin===true)  hNotify('success');
+    if (isWin===false) hNotify('error');
+}
+document.getElementById('mCloseBtn').addEventListener('click', () =>
+    document.getElementById('modal').classList.remove('open'));
+document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') document.getElementById('modal').classList.remove('open');
+});
+
+/* ════════════════════════════════════
+   NAVIGATION
+════════════════════════════════════ */
+let curTab = 'rocket';
+const tabMap = { rocket:'screenRocket', mine:'screenMine' };
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab === curTab) return;
+        document.getElementById(tabMap[curTab]).classList.remove('active');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        curTab = tab;
+        btn.classList.add('active');
+        document.getElementById(tabMap[tab]).classList.add('active');
+        haptic('light');
+    });
+});
+
+/* ════════════════════════════════════
+   QUICK BETS
+════════════════════════════════════ */
+function bindQB(parentId, inputId) {
+    document.getElementById(parentId).querySelectorAll('.qb').forEach(b => {
+        b.addEventListener('click', () => {
+            document.getElementById(inputId).value = b.dataset.v;
+            haptic('light');
+        });
+    });
+}
+bindQB('screenRocket', 'rBetInput');
+bindQB('mSettings',    'mBetInput');
+
+/* ════════════════════════════════════════════════════════
+   ROCKET GAME
+   Stars + trajectory on one canvas, rocket moves along curve
+════════════════════════════════════════════════════════ */
+const R = {
+    active:false, cashedOut:false,
+    mult:1.0, crashAt:0, bet:0, t0:0,
+    frame:null, history:[],
+    els:{
+        mult:     document.getElementById('rMult'),
+        hint:     document.getElementById('rHint'),
+        btn:      document.getElementById('rActionBtn'),
+        betInput: document.getElementById('rBetInput'),
+        histBar:  document.getElementById('rHistory'),
+        canvas:   document.getElementById('rCanvas'),
+        rocket:   document.getElementById('rRocket'),
+    }
+};
+
+const rCtx = R.els.canvas.getContext('2d');
+
+/* Stars pool */
+const STARS = [];
+let starsReady = false;
+
+function initStars(W, H) {
+    starsReady = true;
+    STARS.length = 0;
+    for (let i = 0; i < 60; i++) {
+        STARS.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            r: Math.random() * 1.3 + 0.3,
+            op: Math.random() * 0.55 + 0.15,
+            phase: Math.random() * Math.PI * 2,
+            spd: Math.random() * 0.7 + 0.3
+        });
+    }
+}
+
+/* Normalized trajectory curve: n ∈ [0,1] → height fraction [0,1]
+   starts ~shallow (0.25 slope), ends ~steep (2.5 slope ≈ 67° on square canvas) */
+function curveFrac(n) {
+    return 0.25 * n + 0.75 * Math.pow(n, 3);
+}
+
+/* Convert elapsed seconds → curve parameter n (0→1 asymptotically) */
+function elapsed2n(t) {
+    return 1 - 1 / (1 + t / 7); // n→1 asymptotically; at t=7 → n=0.5
+}
+
+function rDraw(elapsed, crashed) {
+    const cv = R.els.canvas;
+    cv.width  = cv.offsetWidth;
+    cv.height = cv.offsetHeight;
+    const W = cv.width, H = cv.height;
+    const cx = rCtx;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+
+    cx.clearRect(0, 0, W, H);
+
+    /* ── 1. Space background (dark theme only) ── */
+    if (isDark) {
+        cx.fillStyle = '#05051a';
+        cx.fillRect(0, 0, W, H);
+    }
+
+    /* ── 2. Stars ── */
+    if (!starsReady || STARS.length === 0) initStars(W, H);
+
+    const now = Date.now() / 1000;
+    const starSpeed = R.active ? Math.min(1.5 + (R.mult - 1) * 0.5, 10) : 0;
+
+    for (const s of STARS) {
+        const twinkle = 0.15 + 0.4 * (0.5 + 0.5 * Math.sin(now * 1.4 + s.phase));
+        const opacity = isDark ? twinkle : twinkle * 0.28;
+        cx.beginPath();
+        cx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        cx.fillStyle = isDark
+            ? `rgba(200,210,255,${opacity})`
+            : `rgba(61,90,254,${opacity})`;
+        cx.fill();
+
+        if (R.active && starSpeed > 0) {
+            s.y += s.spd * starSpeed;
+            if (s.y > H + 2) {
+                s.y = -2;
+                s.x = Math.random() * W;
+            }
+        }
+    }
+
+    /* ── 3. Trajectory curve ── */
+    if (elapsed > 0) {
+        const MX = 18, MY = 14; // margins
+        const Wc = W - MX * 2;
+        const Hc = H - MY * 2;
+
+        const n = elapsed2n(elapsed);
+        const lineColor = crashed
+            ? 'rgba(255,68,85,0.85)'
+            : 'rgba(61,90,254,0.90)';
+        const fillTop = crashed
+            ? 'rgba(255,68,85,0.18)'
+            : 'rgba(61,90,254,0.18)';
+
+        function getCurvePoint(frac) {
+            const f = Math.min(frac, n);
+            const cf = curveFrac(f);
+            return {
+                x: MX + f * Wc,
+                y: MY + Hc - cf * Hc
+            };
+        }
+
+        const SEGS = 80;
+        const grad = cx.createLinearGradient(0, H, 0, MY);
+        grad.addColorStop(0, fillTop);
+        grad.addColorStop(1, 'transparent');
+
+        /* Fill */
+        cx.beginPath();
+        cx.moveTo(MX, H - MY);
+        for (let i = 0; i <= SEGS; i++) {
+            const p = getCurvePoint(i / SEGS);
+            cx.lineTo(p.x, p.y);
+        }
+        const tipP = getCurvePoint(n);
+        cx.lineTo(tipP.x, H - MY);
+        cx.closePath();
+        cx.fillStyle = grad;
+        cx.fill();
+
+        /* Stroke */
+        cx.beginPath();
+        cx.moveTo(MX, H - MY);
+        for (let i = 0; i <= SEGS; i++) {
+            const p = getCurvePoint(i / SEGS);
+            cx.lineTo(p.x, p.y);
+        }
+        cx.strokeStyle = lineColor;
+        cx.lineWidth = 2;
+        cx.lineJoin = 'round';
+        cx.stroke();
+
+        /* ── 4. Position rocket emoji at curve tip ── */
+        const tip  = getCurvePoint(n);
+        const prev = getCurvePoint(Math.max(0, n - 0.04));
+        const dx = tip.x - prev.x;
+        const dy = tip.y - prev.y; // negative = going up
+        const angleRad = Math.atan2(-dy, dx); // angle above horizontal
+        // 🚀 default points up = 0°. Rotate so it faces direction of travel:
+        // When angleRad=90°(straight up) rotate=0°, when angleRad=0°(horizontal) rotate=-90°
+        const rotateDeg = -(90 - angleRad * 180 / Math.PI);
+
+        const el = R.els.rocket;
+        const ew = 26; // emoji visual width approx
+        const eh = 26;
+        el.style.left      = (tip.x - ew / 2) + 'px';
+        el.style.top       = (tip.y - eh / 2) + 'px';
+        el.style.transform = `rotate(${rotateDeg}deg)`;
+        el.style.display   = 'block';
+
+        if (crashed) {
+            el.style.filter = 'drop-shadow(0 0 10px rgba(255,68,85,0.8)) grayscale(0.6)';
+        } else {
+            el.style.filter = 'drop-shadow(0 0 9px rgba(61,90,254,0.7))';
+        }
+    } else {
+        /* Resting position — bottom left */
+        const el = R.els.rocket;
+        el.style.left      = '18px';
+        el.style.top       = (H - 38) + 'px';
+        el.style.transform = 'rotate(-45deg)';
+        el.style.display   = 'block';
+        el.style.filter    = 'drop-shadow(0 0 8px rgba(61,90,254,0.5))';
+    }
+}
+
+/* Animation loop */
+function rLoop() {
+    if (!R.active) return;
+    const t = (Date.now() - R.t0) / 1000;
+    R.mult = 1 + t * 0.1 + Math.pow(t, 2) * 0.012;
+    R.els.mult.textContent = 'x' + R.mult.toFixed(2);
+    rDraw(t, false);
+    if (R.mult >= R.crashAt && !R.cashedOut) {
+        R.mult = R.crashAt;
+        rCrash();
+        return;
+    }
+    R.frame = requestAnimationFrame(rLoop);
+}
+
+function rGenCrash() {
+    if (Math.random() < 0.04) return 1.0;
+    return Math.max(1.0, Math.min(0.99 / (1 - Math.random()), 100));
+}
+
+function rPushHistory(mult, won) {
+    R.history.unshift({mult, won});
+    if (R.history.length > 22) R.history.pop();
+    R.els.histBar.innerHTML = R.history.map(h =>
+        `<span class="h-chip ${h.won?'w':'l'}">x${h.mult.toFixed(2)}</span>`
+    ).join('');
+}
+
+function rStart() {
+    const bet = parseFloat(R.els.betInput.value);
+    if (!bet||bet<=0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
+    if (bet>balance)  { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+
+    R.active=true; R.cashedOut=false;
+    R.mult=1.0; R.crashAt=rGenCrash(); R.bet=bet; R.t0=Date.now();
+    starsReady=false; // re-init stars for new canvas size
+
+    R.els.btn.textContent='Забрать выигрыш';
+    R.els.btn.className='btn btn-green';
+    R.els.betInput.disabled=true;
+    R.els.mult.className='mult-display';
+    R.els.hint.textContent='🚀 В полёте — нажмите чтобы забрать!';
+    haptic('medium');
+
+    R.frame = requestAnimationFrame(rLoop);
+}
+
+function rCashout() {
+    if (!R.active||R.cashedOut) return;
+    R.cashedOut=true;
+    cancelAnimationFrame(R.frame);
+    const elapsed = (Date.now()-R.t0)/1000;
+    const total=R.bet*R.mult, profit=total-R.bet;
+    rPushHistory(R.mult, true);
+    changeBalance(profit);
+    sendResult('rocket',R.bet,true,total,profit,R.mult);
+    R.active=false;
+    rDraw(elapsed, false);
+    R.els.betInput.disabled=false;
+    R.els.btn.textContent='Сделать ставку'; R.els.btn.className='btn btn-brand';
+    R.els.mult.className='mult-display';
+    R.els.hint.textContent='✅ Забрали '+fmtFull(total);
+    setTimeout(()=>openModal('🎉','Победа!','Множитель x'+R.mult.toFixed(2),'+'+fmtFull(profit),true),200);
+}
+
+function rCrash() {
+    cancelAnimationFrame(R.frame);
+    R.active=false;
+    const elapsed=(Date.now()-R.t0)/1000;
+    rPushHistory(R.crashAt, false);
+    changeBalance(-R.bet);
+    sendResult('rocket',R.bet,false,0,-R.bet,R.crashAt);
+    rDraw(elapsed, true);
+    R.els.mult.classList.add('crashed');
+    R.els.mult.textContent='x'+R.crashAt.toFixed(2);
+    R.els.hint.textContent='💥 Краш!';
+    R.els.betInput.disabled=false;
+    R.els.btn.textContent='Сделать ставку'; R.els.btn.className='btn btn-brand';
+    haptic('heavy');
+    setTimeout(()=>openModal('💥','Краш!','Упало на x'+R.crashAt.toFixed(2),'-'+fmtFull(R.bet),false),650);
+}
+
+document.getElementById('rActionBtn').addEventListener('click', ()=>{
+    if (R.active&&!R.cashedOut) rCashout();
+    else if (!R.active) rStart();
+});
+
+/* Initial still draw */
+(function initRocketDraw() {
+    requestAnimationFrame(() => rDraw(0, false));
+})();
+
+/* ════════════════════════════════════════════════════════
+   MINESWEEPER  (6×6 = 36 cells, no safe first click)
+════════════════════════════════════════════════════════ */
+const CELLS = 36;
+const Mine = { active:false, mines:new Set(), safe:new Set(), mineCount:6, bet:0, mult:1.0 };
+
+function mCalcMult(opened) {
+    if (opened===0) return 1.0;
+    let p=1;
+    const s=CELLS-Mine.mineCount;
+    for(let i=0;i<opened;i++) p*=(s-i)/(CELLS-i);
+    return Math.max(1.0,(1/p)*0.97);
+}
+
+function mBuildGrid() {
+    const g=document.getElementById('mGrid');
+    g.innerHTML=''; g.classList.remove('playing');
+    for(let i=0;i<CELLS;i++){
+        const c=document.createElement('div');
+        c.className='m-cell hidden'; c.dataset.i=i;
+        c.addEventListener('click',()=>mTap(i));
+        g.appendChild(c);
+    }
+}
+const mCell = i => document.querySelector(`#mGrid [data-i="${i}"]`);
+
+function mPlaceMines() {
+    Mine.mines.clear();
+    const pool=Array.from({length:CELLS},(_,i)=>i);
+    for(let i=pool.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [pool[i],pool[j]]=[pool[j],pool[i]];
+    }
+    pool.slice(0,Mine.mineCount).forEach(i=>Mine.mines.add(i));
+}
+
+function mStart() {
+    const bet=parseFloat(document.getElementById('mBetInput').value);
+    if(!bet||bet<=0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
+    if(bet>balance)  { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+
+    Mine.active=true; Mine.safe.clear();
+    Mine.bet=bet; Mine.mult=1.0;
+    mPlaceMines();
+    mBuildGrid();
+    document.getElementById('mGrid').classList.add('playing');
+    mUpdateStats(); mUpdateNext();
+    document.getElementById('mNextHint').style.display='block';
+    document.getElementById('mSettings').style.display='none';
+    document.getElementById('mGamePanel').style.display='block';
+    haptic('medium');
+}
+
+function mTap(idx) {
+    if (!Mine.active) return;
+    if (Mine.safe.has(idx)) return;
+
+    if (Mine.mines.has(idx)) {
+        const c=mCell(idx);
+        c.classList.replace('hidden','mine-hit');
+        c.textContent='💣';
+        haptic('heavy');
+        mGameOver(idx);
+    } else {
+        Mine.safe.add(idx);
+        const c=mCell(idx);
+        c.classList.replace('hidden','safe');
+        c.textContent='💎';
+        haptic('light');
+        Mine.mult=mCalcMult(Mine.safe.size);
+        mUpdateStats(); mUpdateNext();
+        if (Mine.safe.size>=CELLS-Mine.mineCount) setTimeout(mCashout,500);
+    }
+}
+
+function mUpdateStats() {
+    const multEl=document.getElementById('mMult');
+    const prev=multEl.textContent;
+    multEl.textContent='x'+Mine.mult.toFixed(2);
+    document.getElementById('mOpened').textContent=Mine.safe.size;
+    if(prev!==multEl.textContent){ multEl.classList.remove('pop'); void multEl.offsetWidth; multEl.classList.add('pop'); }
+}
+function mUpdateNext() {
+    document.getElementById('mNextVal').textContent='x'+mCalcMult(Mine.safe.size+1).toFixed(2);
+}
+
+async function mGameOver(hitIdx) {
+    Mine.active=false;
+    document.getElementById('mGrid').classList.remove('playing');
+    document.getElementById('mNextHint').style.display='none';
+    const others=[...Mine.mines].filter(i=>i!==hitIdx);
+    for(const i of others){
+        await new Promise(r=>setTimeout(r,90));
+        const c=mCell(i);
+        if(c&&c.classList.contains('hidden')){ c.classList.replace('hidden','mine-show'); c.textContent='💣'; }
+    }
+    changeBalance(-Mine.bet);
+    sendResult('minesweeper',Mine.bet,false,0,-Mine.bet,0);
+    setTimeout(()=>{
+        openModal('💥','Мина!','Открыто безопасных: '+Mine.safe.size,'-'+fmtFull(Mine.bet),false);
+        mResetUI();
+    }, others.length*90+300);
+}
+
+function mCashout() {
+    if(!Mine.active) return;
+    Mine.active=false;
+    document.getElementById('mGrid').classList.remove('playing');
+    document.getElementById('mNextHint').style.display='none';
+    const total=Mine.bet*Mine.mult, profit=total-Mine.bet;
+    changeBalance(profit);
+    sendResult('minesweeper',Mine.bet,true,total,profit,Mine.mult);
+    openModal('💎','Выигрыш!','x'+Mine.mult.toFixed(2)+' · Открыто: '+Mine.safe.size,'+'+fmtFull(profit),true);
+    mResetUI();
+}
+
+function mResetUI() {
+    document.getElementById('mSettings').style.display='block';
+    document.getElementById('mGamePanel').style.display='none';
+    document.querySelectorAll('#mGrid .m-cell.hidden').forEach(c=>c.style.opacity='0.22');
+}
+
+document.getElementById('mStartBtn').addEventListener('click', mStart);
+document.getElementById('mCashoutBtn').addEventListener('click', mCashout);
+
+/* Mine preset buttons */
+document.querySelectorAll('.mine-opt').forEach(btn => {
+    btn.addEventListener('click', ()=>{
+        if(Mine.active) return;
+        document.querySelectorAll('.mine-opt').forEach(b=>b.classList.remove('sel'));
+        btn.classList.add('sel');
+        const v=parseInt(btn.dataset.m);
+        Mine.mineCount=v;
+        document.getElementById('mMinesBadge').textContent=v;
+        document.getElementById('mMineInput').value=v;
+        haptic('light');
+    });
+});
+
+/* Manual mine input */
+document.getElementById('mMineInput').addEventListener('input', function(){
+    if(Mine.active) return;
+    let v=parseInt(this.value);
+    if(isNaN(v)||v<1) v=1;
+    if(v>30) v=30;
+    this.value=v;
+    Mine.mineCount=v;
+    document.getElementById('mMinesBadge').textContent=v;
+    // deselect preset if value doesn't match
+    let matched=false;
+    document.querySelectorAll('.mine-opt').forEach(b=>{
+        if(parseInt(b.dataset.m)===v){ b.classList.add('sel'); matched=true; }
+        else b.classList.remove('sel');
+    });
+});
+
+/* INIT */
+balEl.textContent = fmtShort(balance);
+mBuildGrid();
+</script>
+</body>
+</html>
