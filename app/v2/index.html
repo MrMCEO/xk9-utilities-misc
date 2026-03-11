@@ -524,6 +524,164 @@ main { flex:1; overflow:hidden; position:relative; }
 }
 .modal-cta:active { transform:scale(0.97); }
 
+/* ═══════════════════════════════════════════════════
+   LADDER GAME
+═══════════════════════════════════════════════════ */
+.ladder-wrap {
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    overflow-y:auto;
+    max-height:390px;
+    margin-bottom:10px;
+    padding:2px 0;
+    scrollbar-width:none;
+}
+.ladder-wrap::-webkit-scrollbar { display:none; }
+
+.ladder-row {
+    display:flex;
+    align-items:center;
+    gap:2px;
+    position:relative;
+    flex-shrink:0;
+}
+
+/* Row number label on the left */
+.lr-label {
+    font-size:9px;
+    font-weight:700;
+    color:var(--muted);
+    min-width:16px;
+    text-align:right;
+    flex-shrink:0;
+    margin-right:3px;
+    font-variant-numeric:tabular-nums;
+    transition:color .2s;
+}
+.ladder-row.active .lr-label { color:var(--brand); }
+
+/* Individual platform cell */
+.l-cell {
+    flex:1;
+    height:28px;
+    border-radius:5px;
+    background:var(--card);
+    border:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0;
+    cursor:default;
+    user-select:none;
+    position:relative;
+    overflow:hidden;
+    transition:background .12s, border-color .12s, transform .1s, box-shadow .12s;
+}
+.l-cell::after {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0; height:40%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.07),transparent);
+    pointer-events:none;
+}
+
+/* Active row — player must click here */
+.ladder-row.active .l-cell {
+    cursor:pointer;
+    border-color:var(--brand-hi);
+    background:var(--brand-lo);
+    animation:ldPulse 2s ease-in-out infinite;
+}
+@keyframes ldPulse {
+    0%,100% { box-shadow:0 0 6px var(--brand-mid); }
+    50%      { box-shadow:0 0 16px var(--brand-hi); }
+}
+.ladder-row.active .l-cell:hover  { background:var(--brand-mid); transform:scale(0.9); }
+.ladder-row.active .l-cell:active { transform:scale(0.82); }
+
+/* Safe platform (player stepped here, no stone) */
+.l-cell.l-safe {
+    background:var(--green-lo);
+    border-color:rgba(0,230,118,0.45);
+    box-shadow:0 0 8px rgba(0,230,118,0.15);
+    font-size:12px;
+}
+
+/* Stone fell here */
+.l-cell.l-stone {
+    background:var(--red-lo);
+    border-color:rgba(255,68,85,0.35);
+    font-size:12px;
+    animation:ldStoneFall .38s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes ldStoneFall {
+    0%   { transform:translateY(-14px) scale(0.5); opacity:0; }
+    70%  { transform:translateY(2px) scale(1.1); }
+    100% { transform:translateY(0) scale(1); opacity:1; }
+}
+
+/* Stone hit player's platform */
+.l-cell.l-hit {
+    background:var(--red-lo);
+    border-color:rgba(255,68,85,0.8);
+    box-shadow:0 0 18px rgba(255,68,85,0.4);
+    font-size:14px;
+    animation:ldBoom .42s ease;
+}
+@keyframes ldBoom {
+    0%   { transform:scale(1); }
+    25%  { transform:scale(1.5); }
+    55%  { transform:scale(0.88); }
+    80%  { transform:scale(1.12); }
+    100% { transform:scale(1); }
+}
+
+/* Cleared rows — dim uncovered cells */
+.ladder-row.cleared .l-cell:not(.l-safe):not(.l-stone):not(.l-hit) {
+    opacity:0.25;
+}
+/* Future rows — even dimmer */
+.ladder-row.future .l-cell { opacity:0.35; }
+
+/* Active row left accent bar */
+.ladder-row.active::before {
+    content:'';
+    position:absolute;
+    left:-2px; top:15%; height:70%;
+    width:3px;
+    background:var(--brand);
+    border-radius:2px;
+    box-shadow:0 0 8px var(--brand);
+}
+
+/* Character at start (bottom) */
+.ld-char-start {
+    text-align:center;
+    font-size:22px;
+    padding:4px 0 2px;
+    line-height:1;
+    transition:opacity .3s;
+}
+
+/* Stone preset buttons (reuse mine-opt style) */
+.stone-opt {
+    flex:1; padding:10px 3px;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    color:var(--muted); font-size:12px; font-weight:700;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .1s;
+}
+.stone-opt.sel {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    color:var(--brand);
+    box-shadow:0 0 10px var(--brand-mid);
+}
+.stone-opt:active { transform:scale(0.91); }
+
     </style>
 </head>
 <body>
@@ -544,6 +702,7 @@ main { flex:1; overflow:hidden; position:relative; }
 <div class="tab-bar">
     <button class="tab-btn active" data-tab="rocket"><span class="ti">🚀</span> Ракета</button>
     <button class="tab-btn"        data-tab="mine">  <span class="ti">💣</span> Сапер</button>
+    <button class="tab-btn"        data-tab="ladder"><span class="ti">🪜</span> Лесенка</button>
 </div>
 
 <main>
@@ -642,6 +801,69 @@ main { flex:1; overflow:hidden; position:relative; }
     </div>
 
 </section>
+
+<!-- ══════════ LADDER ══════════ -->
+<section id="screenLadder" class="screen">
+
+    <!-- Stats bar -->
+    <div class="mine-stats">
+        <div class="stat-chip">
+            <div class="stat-lbl">Множитель</div>
+            <div class="stat-val" id="lMult">x1.00</div>
+        </div>
+        <div class="stat-chip">
+            <div class="stat-lbl">Ряд</div>
+            <div class="stat-val" id="lRow">0/12</div>
+        </div>
+        <div class="stat-chip">
+            <div class="stat-lbl">Камни</div>
+            <div class="stat-val" id="lStonesBadge">3</div>
+        </div>
+    </div>
+
+    <!-- Grid (built by JS) -->
+    <div class="ladder-wrap" id="lGrid"></div>
+
+    <!-- Next row hint -->
+    <div class="next-hint" id="lNextHint" style="display:none">
+        Следующий ряд: <b id="lNextVal">x0.00</b>
+    </div>
+
+    <!-- Pre-game settings -->
+    <div id="lSettings">
+        <div class="card">
+            <div class="sec-label">Камни на каждый ряд (по умолчанию 3)</div>
+            <div class="mine-count-row">
+                <div class="mine-opts" style="gap:5px">
+                    <button class="stone-opt"     data-s="1">1</button>
+                    <button class="stone-opt"     data-s="2">2</button>
+                    <button class="stone-opt sel" data-s="3">3</button>
+                    <button class="stone-opt"     data-s="5">5</button>
+                    <button class="stone-opt"     data-s="7">7</button>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="sec-label">Ставка</div>
+            <input type="number" class="bet-input" id="lBetInput" value="100" min="1">
+            <div class="quick-bets">
+                <button class="qb" data-v="50">50</button>
+                <button class="qb" data-v="100">100</button>
+                <button class="qb" data-v="500">500</button>
+                <button class="qb" data-v="1000">1K</button>
+                <button class="qb" data-v="5000">5K</button>
+                <button class="qb" data-v="10000">10K</button>
+            </div>
+        </div>
+        <button class="btn btn-brand" id="lStartBtn">🪜 Начать восхождение</button>
+    </div>
+
+    <!-- In-game panel -->
+    <div id="lGamePanel" style="display:none">
+        <button class="btn btn-green" id="lCashoutBtn" disabled>💎 Забрать выигрыш</button>
+    </div>
+
+</section>
 </main>
 
 <!-- MODAL -->
@@ -736,7 +958,7 @@ document.getElementById('modal').addEventListener('click', e => {
    NAVIGATION
 ════════════════════════════════════ */
 let curTab = 'rocket';
-const tabMap = { rocket:'screenRocket', mine:'screenMine' };
+const tabMap = { rocket:'screenRocket', mine:'screenMine', ladder:'screenLadder' };
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
@@ -1194,6 +1416,297 @@ document.getElementById('mMineInput').addEventListener('input', function(){
 /* INIT */
 balEl.textContent = fmtShort(balance);
 mBuildGrid();
+
+/* ════════════════════════════════════════════════════════
+   LADDER GAME
+   12 рядов, платформы убывают снизу (20) до верха (10)
+   Камни: 1-7 (дефолт 3). Множитель = произведение (1/p)*0.97
+════════════════════════════════════════════════════════ */
+const LD_PLATFORMS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 10]; // индекс 0=низ, 11=верх
+const LD_ROWS      = 12;
+
+const LD = {
+    active:     false,
+    bet:        0,
+    stones:     3,
+    currentRow: -1,   // последний пройденный ряд; -1 = ни одного
+    mult:       1.0,
+    locked:     false // блокировка пока проигрывается анимация
+};
+
+const LDel = {
+    mult:     document.getElementById('lMult'),
+    rowLbl:   document.getElementById('lRow'),
+    badge:    document.getElementById('lStonesBadge'),
+    betInput: document.getElementById('lBetInput'),
+    grid:     document.getElementById('lGrid'),
+    nextHint: document.getElementById('lNextHint'),
+    nextVal:  document.getElementById('lNextVal'),
+    cashout:  document.getElementById('lCashoutBtn'),
+    settings: document.getElementById('lSettings'),
+    panel:    document.getElementById('lGamePanel'),
+};
+
+/* ── Расчёт множителей ── */
+function ldRowMult(rowIdx) {
+    const p = (LD_PLATFORMS[rowIdx] - LD.stones) / LD_PLATFORMS[rowIdx];
+    return (1 / p) * 0.97;
+}
+function ldCumul(upToRow) {
+    let m = 1.0;
+    for (let i = 0; i <= upToRow; i++) m *= ldRowMult(i);
+    return m;
+}
+
+/* ── Построить сетку ── */
+function ldBuildGrid() {
+    const g = LDel.grid;
+    g.innerHTML = '';
+    // DOM: ряд 11 (верх) первый → ряд 0 (низ) последний
+    for (let r = LD_ROWS - 1; r >= 0; r--) {
+        const row = document.createElement('div');
+        row.className = 'ladder-row future';
+        row.dataset.row = r;
+
+        const lbl = document.createElement('span');
+        lbl.className = 'lr-label';
+        lbl.textContent = r + 1;
+        row.appendChild(lbl);
+
+        const count = LD_PLATFORMS[r];
+        for (let p = 0; p < count; p++) {
+            const cell = document.createElement('div');
+            cell.className = 'l-cell';
+            cell.dataset.r = r;
+            cell.dataset.p = p;
+            row.appendChild(cell);
+        }
+        g.appendChild(row);
+    }
+    // Персонаж внизу
+    const charEl = document.createElement('div');
+    charEl.className = 'ld-char-start';
+    charEl.id = 'ldChar';
+    charEl.textContent = '🧍';
+    g.appendChild(charEl);
+
+    // Скролл вниз — показываем ряд 1 (старт)
+    requestAnimationFrame(() => { g.scrollTop = g.scrollHeight; });
+}
+
+/* ── Вспомогательные геттеры ── */
+function ldGetRow(r)    { return LDel.grid.querySelector(`.ladder-row[data-row="${r}"]`); }
+function ldGetCell(r,p) { return LDel.grid.querySelector(`.ladder-row[data-row="${r}"] .l-cell[data-p="${p}"]`); }
+
+/* ── Расставить состояния рядов ── */
+function ldSetStates(activeRow) {
+    for (let r = 0; r < LD_ROWS; r++) {
+        const row = ldGetRow(r);
+        if (!row) continue;
+        row.classList.remove('active','cleared','future');
+        if      (r < activeRow)  row.classList.add('cleared');
+        else if (r === activeRow) row.classList.add('active');
+        else                      row.classList.add('future');
+    }
+    // Скролл к активному ряду
+    const activeEl = ldGetRow(activeRow);
+    if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ── Генерация камней (не попадают на chosen) ── */
+function ldGenStones(rowIdx, excludePlatform) {
+    const total = LD_PLATFORMS[rowIdx];
+    const pool = Array.from({ length: total }, (_, i) => i).filter(i => i !== excludePlatform);
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return new Set(pool.slice(0, LD.stones));
+}
+
+/* ── Генерация камней (ОБЯЗАТЕЛЬНО попадают на chosen) ── */
+function ldGenStonesHit(rowIdx, targetPlatform) {
+    const total = LD_PLATFORMS[rowIdx];
+    const pool = Array.from({ length: total }, (_, i) => i).filter(i => i !== targetPlatform);
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const s = new Set(pool.slice(0, Math.max(0, LD.stones - 1)));
+    s.add(targetPlatform);
+    return s;
+}
+
+/* ── Анимированное раскрытие камней ── */
+async function ldReveal(rowIdx, stoneSet, chosenPlatform, isHit) {
+    // Сначала пометить выбранную клетку (если выжил)
+    if (!isHit) {
+        const cc = ldGetCell(rowIdx, chosenPlatform);
+        if (cc) { cc.classList.add('l-safe'); cc.textContent = '💎'; }
+    }
+    // Затем камни с задержкой
+    for (const platIdx of stoneSet) {
+        await new Promise(r => setTimeout(r, 65));
+        const cell = ldGetCell(rowIdx, platIdx);
+        if (!cell) continue;
+        if (platIdx === chosenPlatform && isHit) {
+            cell.classList.add('l-hit'); cell.textContent = '💥';
+        } else {
+            cell.classList.add('l-stone'); cell.textContent = '🪨';
+        }
+    }
+}
+
+/* ── Обновить статистику ── */
+function ldUpdateStats() {
+    LDel.mult.textContent = 'x' + LD.mult.toFixed(2);
+    LDel.rowLbl.textContent = Math.max(0, LD.currentRow + 1) + '/' + LD_ROWS;
+    LDel.mult.classList.remove('pop'); void LDel.mult.offsetWidth; LDel.mult.classList.add('pop');
+
+    const nextRow = LD.currentRow + 1;
+    if (nextRow < LD_ROWS) {
+        LDel.nextVal.textContent = 'x' + ldCumul(nextRow).toFixed(2);
+    }
+}
+
+/* ── Клик по платформе ── */
+async function ldTap(rowIdx, platIdx) {
+    if (!LD.active || LD.locked) return;
+    if (rowIdx !== LD.currentRow + 1) return; // только следующий ряд
+
+    LD.locked = true;
+    // Убрать пульсацию — ряд "в обработке"
+    ldGetRow(rowIdx)?.classList.remove('active');
+
+    // Определяем исход до анимации
+    const survivalP = (LD_PLATFORMS[rowIdx] - LD.stones) / LD_PLATFORMS[rowIdx];
+    const survived  = Math.random() < survivalP;
+
+    haptic(survived ? 'light' : 'heavy');
+
+    if (survived) {
+        const stones = ldGenStones(rowIdx, platIdx);
+        await ldReveal(rowIdx, stones, platIdx, false);
+
+        LD.currentRow = rowIdx;
+        LD.mult = ldCumul(rowIdx);
+        ldUpdateStats();
+
+        if (LD.currentRow === LD_ROWS - 1) {
+            // Вершина!
+            await new Promise(r => setTimeout(r, 400));
+            ldWin(true);
+        } else {
+            LDel.nextHint.style.display = 'block';
+            LDel.cashout.disabled = false;
+            ldSetStates(LD.currentRow + 1);
+            LD.locked = false;
+        }
+    } else {
+        const stones = ldGenStonesHit(rowIdx, platIdx);
+        await ldReveal(rowIdx, stones, platIdx, true);
+        await new Promise(r => setTimeout(r, 550));
+        ldGameOver();
+    }
+}
+
+/* ── Конец игры: проигрыш ── */
+function ldGameOver() {
+    LD.active = false;
+    LD.locked = false;
+    changeBalance(-LD.bet);
+    sendResult('ladder', LD.bet, false, 0, -LD.bet, 0);
+    hNotify('error');
+    const rowReached = LD.currentRow + 1;
+    openModal('💥', 'Упал!',
+        'Дошёл до ряда ' + rowReached + ' из ' + LD_ROWS,
+        '-' + fmtFull(LD.bet), false);
+    ldResetUI();
+}
+
+/* ── Забрать выигрыш / вершина ── */
+function ldWin(topReached) {
+    LD.active = false;
+    LD.locked = false;
+    const total  = LD.bet * LD.mult;
+    const profit = total - LD.bet;
+    changeBalance(profit);
+    sendResult('ladder', LD.bet, true, total, profit, LD.mult);
+    hNotify('success');
+    const sub = topReached
+        ? '🏆 Покорил вершину! x' + LD.mult.toFixed(2)
+        : 'x' + LD.mult.toFixed(2) + ' · Ряд ' + (LD.currentRow + 1) + '/' + LD_ROWS;
+    openModal('🎉', 'Победа!', sub, '+' + fmtFull(profit), true);
+    ldResetUI();
+}
+
+function ldCashout() {
+    if (!LD.active || LD.locked || LD.currentRow < 0) return;
+    ldWin(false);
+}
+
+function ldResetUI() {
+    LDel.settings.style.display = 'block';
+    LDel.panel.style.display    = 'none';
+    LDel.nextHint.style.display = 'none';
+    LDel.cashout.disabled = true;
+    LD.currentRow = -1;
+    LD.mult = 1.0;
+    LDel.mult.textContent   = 'x1.00';
+    LDel.rowLbl.textContent = '0/12';
+    ldBuildGrid();
+}
+
+function ldStart() {
+    const bet = parseFloat(LDel.betInput.value);
+    if (!bet || bet <= 0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
+    if (bet > balance)    { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+
+    LD.bet        = bet;
+    LD.active     = true;
+    LD.locked     = false;
+    LD.currentRow = -1;
+    LD.mult       = 1.0;
+
+    ldBuildGrid();
+    ldSetStates(0);
+
+    LDel.settings.style.display = 'none';
+    LDel.panel.style.display    = 'block';
+    LDel.nextHint.style.display = 'none';
+    LDel.cashout.disabled       = true;
+    ldUpdateStats();
+    haptic('medium');
+}
+
+/* ── Event delegation (сетка) ── */
+LDel.grid.addEventListener('click', e => {
+    const cell = e.target.closest('.l-cell');
+    if (!cell) return;
+    ldTap(parseInt(cell.dataset.r), parseInt(cell.dataset.p));
+});
+
+/* ── Кнопки ── */
+document.getElementById('lStartBtn').addEventListener('click', ldStart);
+document.getElementById('lCashoutBtn').addEventListener('click', ldCashout);
+
+/* ── Пресеты камней ── */
+document.querySelectorAll('.stone-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (LD.active) return;
+        document.querySelectorAll('.stone-opt').forEach(b => b.classList.remove('sel'));
+        btn.classList.add('sel');
+        LD.stones = parseInt(btn.dataset.s);
+        LDel.badge.textContent = LD.stones;
+        haptic('light');
+    });
+});
+
+/* ── Быстрые ставки ── */
+bindQB('lSettings', 'lBetInput');
+
+/* ── Init ── */
+ldBuildGrid();
 </script>
 </body>
 </html>
