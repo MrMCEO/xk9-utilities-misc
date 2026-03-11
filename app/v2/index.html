@@ -70,6 +70,10 @@ body {
     display: flex;
     flex-direction: column;
     transition: var(--tr);
+    /* Центрируем контент на широких экранах */
+    max-width: 480px;
+    margin: 0 auto;
+    box-shadow: -1px 0 0 var(--border), 1px 0 0 var(--border);
 }
 
 body::before {
@@ -79,6 +83,7 @@ body::before {
     background-size: 26px 26px;
     pointer-events:none; z-index:0;
     transition: var(--tr);
+    will-change: background-image;
 }
 
 body>* { position:relative; z-index:1; }
@@ -290,13 +295,14 @@ main { flex:1; overflow:hidden; position:relative; }
 ═══════════════════════════════════════════════════ */
 .game-stage {
     position:relative;
-    height:200px;
+    height:180px;
     border-radius:var(--r-lg);
     background:var(--card);
     border:1px solid var(--border);
     overflow:hidden;
     margin-bottom:10px;
     transition:var(--tr);
+    contain:layout style;
 }
 
 [data-theme="dark"]  .game-stage { background:#050514; border-color:rgba(61,90,254,0.2); }
@@ -314,12 +320,13 @@ main { flex:1; overflow:hidden; position:relative; }
 }
 
 .mult-display {
-    font-size:52px; font-weight:900; letter-spacing:-2px;
+    font-size:40px; font-weight:900; letter-spacing:-2px;
     color:var(--brand);
     text-shadow:0 0 36px var(--brand-mid);
     line-height:1;
     font-variant-numeric:tabular-nums;
     transition:color .3s, text-shadow .3s;
+    will-change:transform;
 }
 .mult-display.crashed {
     color:var(--red);
@@ -421,17 +428,20 @@ main { flex:1; overflow:hidden; position:relative; }
 .mine-grid {
     display:grid;
     grid-template-columns:repeat(6,1fr);
-    gap:5px; margin-bottom:10px;
+    gap:4px; margin-bottom:10px;
+    max-width:340px;
+    margin-left:auto; margin-right:auto;
 }
 
 .m-cell {
-    aspect-ratio:1; border-radius:9px;
+    aspect-ratio:1; border-radius:8px;
     background:var(--card); border:1px solid var(--border);
     cursor:default;
     display:flex; align-items:center; justify-content:center;
     font-size:0;
     transition:background .13s, border-color .13s, transform .11s, box-shadow .13s;
     position:relative; overflow:hidden; user-select:none;
+    contain:layout style;
 }
 .m-cell::before {
     content:''; position:absolute;
@@ -507,10 +517,10 @@ main { flex:1; overflow:hidden; position:relative; }
 [data-theme="dark"] .modal-box { box-shadow:0 24px 72px rgba(0,0,0,0.65), 0 0 36px var(--brand-lo); }
 .modal-ov.open .modal-box { transform:scale(1) translateY(0); }
 
-.modal-emoji  { font-size:62px; margin-bottom:12px; line-height:1; }
-.modal-title  { font-size:24px; font-weight:900; margin-bottom:5px; }
-.modal-sub    { font-size:12px; color:var(--muted); margin-bottom:4px; transition:var(--tr); }
-.modal-amt    { font-size:36px; font-weight:900; letter-spacing:-1px; margin:5px 0 20px; font-variant-numeric:tabular-nums; }
+.modal-emoji  { font-size:50px; margin-bottom:10px; line-height:1; }
+.modal-title  { font-size:20px; font-weight:900; margin-bottom:4px; }
+.modal-sub    { font-size:11px; color:var(--muted); margin-bottom:4px; transition:var(--tr); }
+.modal-amt    { font-size:28px; font-weight:900; letter-spacing:-1px; margin:4px 0 16px; font-variant-numeric:tabular-nums; }
 .modal-amt.win  { color:var(--green); }
 .modal-amt.lose { color:var(--red); }
 
@@ -1005,24 +1015,24 @@ const R = {
     }
 };
 
-const rCtx = R.els.canvas.getContext('2d');
+const rCtx = R.els.canvas.getContext('2d', { alpha: false });
 
-/* Stars pool */
-const STARS = [];
+/* Stars pool — pre-allocated */
+const STARS = new Array(60);
 let starsReady = false;
+let lastCanvasW = 0, lastCanvasH = 0;
 
 function initStars(W, H) {
     starsReady = true;
-    STARS.length = 0;
     for (let i = 0; i < 60; i++) {
-        STARS.push({
+        STARS[i] = {
             x: Math.random() * W,
             y: Math.random() * H,
             r: Math.random() * 1.3 + 0.3,
             op: Math.random() * 0.55 + 0.15,
             phase: Math.random() * Math.PI * 2,
             spd: Math.random() * 0.7 + 0.3
-        });
+        };
     }
 }
 
@@ -1039,8 +1049,13 @@ function elapsed2n(t) {
 
 function rDraw(elapsed, crashed) {
     const cv = R.els.canvas;
-    cv.width  = cv.offsetWidth;
-    cv.height = cv.offsetHeight;
+    const ow = cv.offsetWidth, oh = cv.offsetHeight;
+    // Resize canvas only when dimensions actually change
+    if (ow !== lastCanvasW || oh !== lastCanvasH) {
+        cv.width = ow; cv.height = oh;
+        lastCanvasW = ow; lastCanvasH = oh;
+        starsReady = false; // re-init stars for new size
+    }
     const W = cv.width, H = cv.height;
     const cx = rCtx;
     const isDark = html.getAttribute('data-theme') === 'dark';
@@ -1200,7 +1215,7 @@ function rStart() {
 
     R.active=true; R.cashedOut=false;
     R.mult=1.0; R.crashAt=rGenCrash(); R.bet=bet; R.t0=Date.now();
-    starsReady=false; // re-init stars for new canvas size
+    lastCanvasW=0; lastCanvasH=0; // force canvas resize on next draw
 
     R.els.btn.textContent='Забрать выигрыш';
     R.els.btn.className='btn btn-green';
@@ -1274,14 +1289,32 @@ function mCalcMult(opened) {
 function mBuildGrid() {
     const g=document.getElementById('mGrid');
     g.innerHTML=''; g.classList.remove('playing');
+    const frag=document.createDocumentFragment();
     for(let i=0;i<CELLS;i++){
         const c=document.createElement('div');
         c.className='m-cell hidden'; c.dataset.i=i;
-        c.addEventListener('click',()=>mTap(i));
-        g.appendChild(c);
+        frag.appendChild(c);
     }
+    g.appendChild(frag);
 }
-const mCell = i => document.querySelector(`#mGrid [data-i="${i}"]`);
+
+/* Event delegation — один слушатель вместо 36 */
+document.getElementById('mGrid').addEventListener('click', e => {
+    const c = e.target.closest('.m-cell');
+    if (!c) return;
+    mTap(parseInt(c.dataset.i));
+});
+
+/* Cache grid cells for fast access */
+const mCellCache = new Map();
+const mCell = i => {
+    let c = mCellCache.get(i);
+    if (!c || !c.isConnected) {
+        c = document.querySelector(`#mGrid [data-i="${i}"]`);
+        if (c) mCellCache.set(i, c);
+    }
+    return c;
+};
 
 function mPlaceMines() {
     Mine.mines.clear();
@@ -1301,6 +1334,7 @@ function mStart() {
     Mine.active=true; Mine.safe.clear();
     Mine.bet=bet; Mine.mult=1.0;
     mPlaceMines();
+    mCellCache.clear();
     mBuildGrid();
     document.getElementById('mGrid').classList.add('playing');
     mUpdateStats(); mUpdateNext();
