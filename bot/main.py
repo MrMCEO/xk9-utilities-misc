@@ -16,9 +16,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH
 from database import (
     init_db,
-    get_or_create_user, 
-    get_user_balance, 
-    update_balance, 
+    get_or_create_user,
+    get_user_balance,
+    update_balance,
+    update_balance_checked,
     set_balance,
     add_game,
     get_user_games,
@@ -246,15 +247,9 @@ async def cmd_casino(message: Message):
             return
 
         stake = float(args[1])
-        
+
         if stake <= 0:
             await message.answer("❌ Ставка должна быть больше 0")
-            return
-
-        balance = get_user_balance(message.from_user.id)
-        
-        if stake > balance:
-            await message.answer(f"❌ Недостаточно средств. Ваш баланс: ${balance:,.2f}")
             return
 
         # Множители с весами
@@ -272,10 +267,10 @@ async def cmd_casino(message: Message):
             (15, 0.005),
             (100, 0.0005)
         ]
-        
+
         total_weight = sum(w for _, w in multipliers)
         rand = random.uniform(0, total_weight)
-        
+
         cumulative = 0
         multiplier = 0
         for mult, weight in multipliers:
@@ -287,8 +282,13 @@ async def cmd_casino(message: Message):
         winnings = stake * multiplier
         profit = winnings - stake
 
-        update_balance(message.from_user.id, -stake)
-        
+        # Атомарное списание ставки с проверкой баланса (один запрос в БД)
+        success, balance = update_balance_checked(message.from_user.id, -stake)
+        if not success:
+            await message.answer(f"❌ Недостаточно средств. Ваш баланс: ${balance:,.2f}")
+            return
+
+        # Начисляем выигрыш если есть (один запрос вместо двух)
         if winnings > 0:
             update_balance(message.from_user.id, winnings)
 
@@ -459,6 +459,8 @@ async def on_shutdown():
 
 
 if __name__ == "__main__":
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
     try:
         dp.run_polling(bot)
     except KeyboardInterrupt:

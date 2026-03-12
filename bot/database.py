@@ -4,9 +4,12 @@ from config import DB_PATH
 
 
 def get_connection() -> sqlite3.Connection:
-    """Получить соединение с БД"""
+    """Получить соединение с БД (WAL-режим для лучшей производительности)"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-8000")  # 8MB кэш
     return conn
 
 
@@ -43,10 +46,16 @@ def init_db() -> None:
         )
     """)
 
-    # Индекс для быстрого поиска
+    # Индекс для быстрого поиска по пользователю и дате
     cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_telegram_id 
+        CREATE INDEX IF NOT EXISTS idx_games_telegram_id
         ON games(telegram_id, created_at DESC)
+    """)
+
+    # Индекс для фильтрации по типу игры
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_games_type
+        ON games(game_type)
     """)
 
     conn.commit()
@@ -66,33 +75,30 @@ def get_or_create_user(
     first_name: str = None,
     last_name: str = None
 ) -> Optional[Dict[str, Any]]:
-    """Получить или создать пользователя"""
+    """Получить или создать пользователя (INSERT OR IGNORE + UPDATE, 2 запроса вместо 3)"""
     from config import DEFAULT_BALANCE
-    
+
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Пытаемся создать — если уже есть, игнорируем
+    cursor.execute(
+        """INSERT OR IGNORE INTO users (telegram_id, username, first_name, last_name, balance)
+           VALUES (?, ?, ?, ?, ?)""",
+        (telegram_id, username, first_name, last_name, DEFAULT_BALANCE)
+    )
+
+    # Обновляем данные профиля (всегда актуальные)
+    cursor.execute(
+        """UPDATE users
+           SET username = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?""",
+        (username, first_name, last_name, telegram_id)
+    )
+    conn.commit()
+
     cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
     user = cursor.fetchone()
-
-    if not user:
-        cursor.execute(
-            """INSERT INTO users (telegram_id, username, first_name, last_name, balance)
-               VALUES (?, ?, ?, ?, ?)""",
-            (telegram_id, username, first_name, last_name, DEFAULT_BALANCE)
-        )
-        conn.commit()
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-    else:
-        # Обновляем данные
-        cursor.execute(
-            """UPDATE users
-               SET username = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP
-               WHERE telegram_id = ?""",
-            (username, first_name, last_name, telegram_id)
-        )
-        conn.commit()
 
     conn.close()
     return dict(user) if user else None
@@ -124,42 +130,68 @@ def get_user_balance(telegram_id: int) -> float:
 
 def update_balance(telegram_id: int, amount: float) -> float:
     """
-    Обновить баланс пользователя.
-    amount > 0 - пополнение
-    amount < 0 - списание
+    Обновить баланс пользователя (один запрос через RETURNING).
+    amount > 0 — пополнение, amount < 0 — списание.
     """
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?",
+        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?
+           RETURNING balance""",
         (amount, telegram_id)
     )
-    conn.commit()
-
-    cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
     result = cursor.fetchone()
-
+    conn.commit()
     conn.close()
-    return result["balance"] if result else 0.0
+    return result[0] if result else 0.0
 
 
-def set_balance(telegram_id: int, amount: float) -> float:
-    """Установить баланс пользователя"""
+def update_balance_checked(telegram_id: int, amount: float) -> tuple[bool, float]:
+    """
+    Обновить баланс с проверкой достаточности средств (для казино).
+    Возвращает (success, new_balance).
+    Если средств не хватает — не изменяет баланс.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
-        "UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?",
-        (amount, telegram_id)
+        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ? AND balance + ? >= 0
+           RETURNING balance""",
+        (amount, telegram_id, amount)
     )
+    result = cursor.fetchone()
     conn.commit()
 
-    cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
-    result = cursor.fetchone()
+    if result:
+        conn.close()
+        return True, result[0]
 
+    # Средств не хватило — возвращаем текущий баланс
+    cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
+    row = cursor.fetchone()
     conn.close()
-    return result["balance"] if result else 0.0
+    return False, (row["balance"] if row else 0.0)
+
+
+def set_balance(telegram_id: int, amount: float) -> float:
+    """Установить баланс пользователя (один запрос через RETURNING)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?
+           RETURNING balance""",
+        (amount, telegram_id)
+    )
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return result[0] if result else 0.0
 
 
 def get_all_users() -> List[Dict[str, Any]]:
@@ -192,15 +224,15 @@ def add_game(
     cursor = conn.cursor()
 
     cursor.execute(
-        """INSERT INTO games (telegram_id, game_type, stake, result, winnings, multiplier) 
+        """INSERT INTO games (telegram_id, game_type, stake, result, winnings, multiplier)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (telegram_id, game_type, stake, result, winnings, multiplier)
     )
-    
+
     game_id = cursor.lastrowid
     conn.commit()
     conn.close()
-    
+
     return game_id
 
 
@@ -210,9 +242,9 @@ def get_user_games(telegram_id: int, limit: int = 15) -> List[Dict[str, Any]]:
     cursor = conn.cursor()
 
     cursor.execute(
-        """SELECT * FROM games 
-           WHERE telegram_id = ? 
-           ORDER BY created_at DESC 
+        """SELECT * FROM games
+           WHERE telegram_id = ?
+           ORDER BY created_at DESC
            LIMIT ?""",
         (telegram_id, limit)
     )
@@ -228,7 +260,7 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT 
+        SELECT
             COUNT(*) as total_games,
             SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
             SUM(CASE WHEN result = 'lose' THEN 1 ELSE 0 END) as losses,
@@ -237,7 +269,7 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
         FROM games
         WHERE telegram_id = ?
     """, (telegram_id,))
-    
+
     stats = cursor.fetchone()
     conn.close()
 
@@ -265,10 +297,10 @@ def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:
     cursor = conn.cursor()
 
     cursor.execute(
-        """SELECT g.*, u.first_name, u.username 
+        """SELECT g.*, u.first_name, u.username
            FROM games g
            JOIN users u ON g.telegram_id = u.telegram_id
-           ORDER BY g.created_at DESC 
+           ORDER BY g.created_at DESC
            LIMIT ?""",
         (limit,)
     )
@@ -286,13 +318,13 @@ def cleanup_old_games(days: int = 30) -> int:
     cursor = conn.cursor()
 
     cursor.execute(
-        """DELETE FROM games 
+        """DELETE FROM games
            WHERE created_at < datetime('now', ? || ' days')""",
         (f'-{days}',)
     )
-    
+
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
-    
+
     return deleted
