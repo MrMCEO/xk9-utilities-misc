@@ -749,6 +749,114 @@ main { flex:1; overflow:hidden; position:relative; }
     .modal-amt { font-size:28px; }
 }
 
+/* ═══════════════════════════════════════════════════
+   DEPOSIT MODAL
+═══════════════════════════════════════════════════ */
+.deposit-ov {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.82);
+    backdrop-filter:blur(16px);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index:1100; opacity:0; pointer-events:none;
+    transition:opacity .24s;
+}
+.deposit-ov.open { opacity:1; pointer-events:auto; }
+
+.deposit-box {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:20px 20px 0 0;
+    padding:24px 20px 32px;
+    width:100%; max-width:480px;
+    transform:translateY(100%);
+    transition:transform .34s cubic-bezier(0.34,1.4,0.64,1), var(--tr);
+    box-shadow:var(--shadow);
+}
+[data-theme="dark"] .deposit-box { box-shadow:0 -16px 60px rgba(0,0,0,0.6), 0 0 40px var(--brand-lo); }
+.deposit-ov.open .deposit-box { transform:translateY(0); }
+
+.deposit-handle {
+    width:36px; height:4px; border-radius:2px;
+    background:var(--border); margin:0 auto 18px;
+}
+
+.deposit-title {
+    font-size:20px; font-weight:900;
+    text-align:center; margin-bottom:4px;
+    color:var(--text);
+}
+.deposit-sub {
+    font-size:12px; color:var(--muted);
+    text-align:center; margin-bottom:20px;
+    transition:var(--tr);
+}
+
+/* Preset amount grid */
+.deposit-presets {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px; margin-bottom:14px;
+}
+.dep-preset {
+    padding:14px 6px;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:var(--r);
+    color:var(--text); font-size:15px; font-weight:800;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .12s, box-shadow .18s;
+    backdrop-filter:blur(8px);
+}
+.dep-preset:hover {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    box-shadow:0 0 14px var(--brand-mid);
+}
+.dep-preset:active { transform:scale(0.9); }
+
+/* Manual input row */
+.deposit-manual-row {
+    display:flex; gap:8px; margin-bottom:16px; align-items:stretch;
+}
+.deposit-input {
+    flex:1; padding:12px 14px;
+    background:var(--input-bg);
+    border:1.5px solid var(--border);
+    border-radius:var(--r);
+    color:var(--text); font-size:17px; font-weight:700;
+    outline:none;
+    transition:var(--tr), box-shadow .2s;
+    font-variant-numeric:tabular-nums;
+}
+.deposit-input:focus { border-color:var(--brand-hi); box-shadow:0 0 0 3px var(--brand-lo); }
+.dep-manual-btn {
+    padding:0 18px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    border:none; border-radius:var(--r);
+    color:#fff; font-size:13px; font-weight:800;
+    cursor:pointer; white-space:nowrap;
+    box-shadow:0 4px 18px var(--brand-mid);
+    transition:transform .12s, opacity .18s;
+    letter-spacing:.3px;
+}
+.dep-manual-btn:active { transform:scale(0.94); }
+.dep-manual-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+/* Success state inside deposit modal */
+.deposit-success {
+    text-align:center; padding:10px 0 4px;
+    display:none;
+}
+.deposit-success.show { display:block; }
+.dep-success-icon { font-size:52px; margin-bottom:10px; line-height:1; }
+.dep-success-text {
+    font-size:20px; font-weight:900;
+    color:var(--green);
+    text-shadow:0 0 20px rgba(0,230,118,0.35);
+    margin-bottom:6px;
+}
+.dep-success-sub { font-size:12px; color:var(--muted); margin-bottom:18px; }
+
 /* Stone preset buttons (reuse mine-opt style) */
 .stone-opt {
     flex:1; padding:10px 3px;
@@ -779,6 +887,7 @@ main { flex:1; overflow:hidden; position:relative; }
             <div class="bal-label">Баланс</div>
             <div class="bal-val" id="balVal">$1 000 000</div>
         </div>
+        <button class="theme-btn" id="depositBtn" title="Пополнить баланс" style="color:var(--brand);border-color:var(--brand-hi);font-size:18px;">+</button>
         <button class="theme-btn" id="themeBtn">🌙</button>
     </div>
 </header>
@@ -950,6 +1059,41 @@ main { flex:1; overflow:hidden; position:relative; }
 
 </section>
 </main>
+
+<!-- DEPOSIT MODAL -->
+<div class="deposit-ov" id="depositModal">
+    <div class="deposit-box" id="depositBox">
+        <div class="deposit-handle"></div>
+
+        <!-- Default view: choose amount -->
+        <div id="depositContent">
+            <div class="deposit-title">Пополнить баланс</div>
+            <div class="deposit-sub">Выберите сумму или введите свою</div>
+
+            <div class="deposit-presets">
+                <button class="dep-preset" data-amount="50">50 ₽</button>
+                <button class="dep-preset" data-amount="100">100 ₽</button>
+                <button class="dep-preset" data-amount="250">250 ₽</button>
+                <button class="dep-preset" data-amount="500">500 ₽</button>
+                <button class="dep-preset" data-amount="1000">1 000 ₽</button>
+                <button class="dep-preset" data-amount="2500">2 500 ₽</button>
+            </div>
+
+            <div class="deposit-manual-row">
+                <input type="number" class="deposit-input" id="depositAmtInput" placeholder="Своя сумма, ₽" min="1">
+                <button class="dep-manual-btn" id="depositManualBtn">Оплатить</button>
+            </div>
+        </div>
+
+        <!-- Success view -->
+        <div class="deposit-success" id="depositSuccess">
+            <div class="dep-success-icon">🎉</div>
+            <div class="dep-success-text">Баланс пополнен!</div>
+            <div class="dep-success-sub" id="depositSuccessSub">+0 ₽ зачислено на счёт</div>
+            <button class="modal-cta" id="depositSuccessClose">Отлично!</button>
+        </div>
+    </div>
+</div>
 
 <!-- CONFETTI -->
 <canvas id="confettiCanvas"></canvas>
@@ -1937,6 +2081,97 @@ document.querySelectorAll('.stone-opt').forEach(btn => {
         haptic('light');
     });
 });
+
+/* ════════════════════════════════════
+   DEPOSIT MODAL
+════════════════════════════════════ */
+const depositModal   = document.getElementById('depositModal');
+const depositContent = document.getElementById('depositContent');
+const depositSuccess = document.getElementById('depositSuccess');
+const depositInput   = document.getElementById('depositAmtInput');
+const depositManual  = document.getElementById('depositManualBtn');
+
+function openDeposit() {
+    depositContent.style.display = 'block';
+    depositSuccess.classList.remove('show');
+    depositInput.value = '';
+    depositModal.classList.add('open');
+    haptic('light');
+}
+
+function closeDeposit() {
+    depositModal.classList.remove('open');
+}
+
+document.getElementById('depositBtn').addEventListener('click', openDeposit);
+
+/* Close when clicking backdrop */
+depositModal.addEventListener('click', e => {
+    if (e.target === depositModal) closeDeposit();
+});
+
+document.getElementById('depositSuccessClose').addEventListener('click', closeDeposit);
+
+/* Preset buttons */
+depositModal.querySelectorAll('.dep-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+        haptic('medium');
+        initiatePayment(parseInt(btn.dataset.amount));
+    });
+});
+
+/* Manual pay button */
+depositManual.addEventListener('click', () => {
+    const val = parseInt(depositInput.value);
+    if (!val || val < 1) {
+        depositInput.focus();
+        return;
+    }
+    haptic('medium');
+    initiatePayment(val);
+});
+
+function initiatePayment(amount) {
+    /* Build invoice link. In production this comes from the bot via tg.sendData / deeplink.
+       Here we use a placeholder URL — replace with actual YooKassa invoice link from bot. */
+    const invoiceUrl = `https://t.me/${'invoice/' + encodeURIComponent('deposit_' + amount)}`;
+
+    if (tg.openInvoice) {
+        tg.openInvoice(invoiceUrl, result => handleInvoiceClosed(amount, result));
+    } else {
+        /* Fallback for browser preview — simulate success */
+        handleInvoiceClosed(amount, { status: 'paid' });
+    }
+}
+
+function handleInvoiceClosed(amount, result) {
+    if (result && result.status === 'paid') {
+        changeBalance(amount);
+        confStart();
+        depositContent.style.display = 'none';
+        document.getElementById('depositSuccessSub').textContent =
+            '+' + amount.toLocaleString('ru-RU') + ' ₽ зачислено на счёт';
+        depositSuccess.classList.add('show');
+        hNotify('success');
+    }
+    /* Other statuses (cancelled, failed) — just close */
+    else if (result && result.status !== 'pending') {
+        closeDeposit();
+    }
+}
+
+/* Also listen to Telegram invoiceClosed event (fires globally) */
+if (tg.onEvent) {
+    tg.onEvent('invoiceClosed', data => {
+        /* data.url contains the invoice link we passed, data.status — result */
+        if (depositModal.classList.contains('open')) {
+            /* Extract amount from url if possible, fallback to input value */
+            const match = data && data.url && data.url.match(/deposit_(\d+)/);
+            const amount = match ? parseInt(match[1]) : parseInt(depositInput.value) || 0;
+            handleInvoiceClosed(amount, data);
+        }
+    });
+}
 
 /* ── Быстрые ставки ── */
 bindQB('lSettings', 'lBetInput');
