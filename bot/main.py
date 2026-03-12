@@ -4,16 +4,18 @@ import random
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import (
-    Message, 
-    CallbackQuery, 
-    InlineKeyboardMarkup, 
-    InlineKeyboardButton, 
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
     WebAppInfo,
-    MenuButtonWebApp
+    MenuButtonWebApp,
+    LabeledPrice,
+    PreCheckoutQuery,
 )
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH
+from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH, PAYMENTS_TOKEN, COINS_PER_RUBLE
 from database import (
     init_db,
     get_or_create_user,
@@ -25,7 +27,9 @@ from database import (
     get_user_games,
     get_user_stats,
     get_all_users,
-    get_recent_games
+    get_recent_games,
+    add_donation,
+    get_user_donations,
 )
 
 # Настройка логирования
@@ -50,8 +54,9 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
     builder.button(text="📊 Моя статистика")
     builder.button(text="💰 Баланс")
     builder.button(text="📜 История игр")
+    builder.button(text="💳 Пополнить")
     builder.button(text="❓ Помощь")
-    builder.adjust(1, 2, 2, 1)
+    builder.adjust(1, 2, 2, 2)
     return builder.as_markup(resize_keyboard=True)
 
 
@@ -118,6 +123,7 @@ async def cmd_help(message: Message):
         "/balance - Проверить баланс\n"
         "/stats - Моя статистика\n"
         "/history - История игр\n"
+        "/donate - Пополнить баланс\n"
         "/help - Эта справка\n\n"
         "🔧 <b>Админ:</b>\n"
         "/admin - Панель администратора\n"
@@ -436,6 +442,125 @@ async def cmd_setbalance(message: Message):
 
     except (ValueError, IndexError):
         await message.answer("❌ Ошибка. Используйте: /setbalance <user_id> <amount>")
+
+
+# === Донаты / пополнение баланса ===
+
+# Варианты пополнения: (сумма в рублях, подпись)
+DONATE_OPTIONS = [
+    (50,   "50 руб → 5 000 монет"),
+    (100,  "100 руб → 10 000 монет"),
+    (250,  "250 руб → 25 000 монет"),
+    (500,  "500 руб → 50 000 монет"),
+    (1000, "1 000 руб → 100 000 монет"),
+]
+
+
+def get_donate_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for amount_rub, label in DONATE_OPTIONS:
+        builder.button(text=label, callback_data=f"donate_{amount_rub}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+@dp.message(Command("donate"))
+@dp.message(F.text == "💳 Пополнить")
+async def cmd_donate(message: Message):
+    """Показать меню пополнения баланса"""
+    if not PAYMENTS_TOKEN:
+        await message.answer(
+            "❌ Платежи временно недоступны. Обратитесь к администратору.",
+            parse_mode='HTML'
+        )
+        return
+
+    await message.answer(
+        "💳 <b>Пополнение баланса</b>\n\n"
+        f"1 рубль = {COINS_PER_RUBLE:,} монет\n\n"
+        "Выберите сумму пополнения:",
+        reply_markup=get_donate_keyboard(),
+        parse_mode='HTML'
+    )
+
+
+@dp.callback_query(F.data.startswith("donate_"))
+async def cb_donate_amount(callback_query: CallbackQuery):
+    """Создать инвойс на выбранную сумму"""
+    if not PAYMENTS_TOKEN:
+        await callback_query.answer("Платежи недоступны", show_alert=True)
+        return
+
+    try:
+        amount_rub = int(callback_query.data.split("_")[1])
+    except (IndexError, ValueError):
+        await callback_query.answer("Ошибка", show_alert=True)
+        return
+
+    coins = amount_rub * COINS_PER_RUBLE
+
+    await callback_query.message.answer_invoice(
+        title="Пополнение BFG Casino",
+        description=f"Зачислит {coins:,} монет на ваш игровой баланс",
+        payload=f"donate_{amount_rub}_{callback_query.from_user.id}",
+        provider_token=PAYMENTS_TOKEN,
+        currency="RUB",
+        prices=[LabeledPrice(label=f"{coins:,} монет", amount=amount_rub * 100)],  # amount в копейках
+        start_parameter="donate",
+    )
+    await callback_query.answer()
+
+
+@dp.pre_checkout_query()
+async def handle_pre_checkout(pre_checkout_query: PreCheckoutQuery):
+    """Подтвердить платёж (вызывается Telegram перед списанием)"""
+    # Проверяем payload — должен начинаться с "donate_"
+    if not pre_checkout_query.invoice_payload.startswith("donate_"):
+        await pre_checkout_query.answer(ok=False, error_message="Неверный платёж")
+        return
+
+    await pre_checkout_query.answer(ok=True)
+
+
+@dp.message(F.successful_payment)
+async def handle_successful_payment(message: Message):
+    """Обработать успешный платёж — зачислить монеты на баланс"""
+    payment = message.successful_payment
+    telegram_id = message.from_user.id
+
+    try:
+        # Извлекаем сумму в рублях из payload ("donate_<rub>_<user_id>")
+        parts = payment.invoice_payload.split("_")
+        amount_rub = int(parts[1])
+    except (IndexError, ValueError):
+        logger.error(f"Неверный payload платежа: {payment.invoice_payload}")
+        await message.answer("❌ Ошибка обработки платежа. Обратитесь к администратору.")
+        return
+
+    coins = amount_rub * COINS_PER_RUBLE
+
+    try:
+        new_balance = add_donation(
+            telegram_id=telegram_id,
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            provider_payment_charge_id=payment.provider_payment_charge_id,
+            amount_rub=amount_rub,
+            coins_credited=coins,
+        )
+        logger.info(
+            f"Пополнение: user={telegram_id}, {amount_rub} руб, {coins} монет, "
+            f"charge_id={payment.telegram_payment_charge_id}"
+        )
+        await message.answer(
+            f"✅ <b>Баланс пополнен!</b>\n\n"
+            f"Зачислено: <b>{coins:,} монет</b>\n"
+            f"Текущий баланс: <b>${new_balance:,.2f}</b>",
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        # UNIQUE constraint на charge_id защищает от двойного зачисления
+        logger.error(f"Ошибка зачисления доната user={telegram_id}: {e}")
+        await message.answer("❌ Ошибка зачисления. Обратитесь к администратору.")
 
 
 # === Запуск бота ===

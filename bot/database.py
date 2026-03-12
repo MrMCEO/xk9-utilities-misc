@@ -58,6 +58,25 @@ def init_db() -> None:
         ON games(game_type)
     """)
 
+    # Таблица донатов (пополнений через Telegram Payments)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS donations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER NOT NULL,
+            telegram_payment_charge_id TEXT NOT NULL UNIQUE,
+            provider_payment_charge_id TEXT,
+            amount_rub INTEGER NOT NULL,
+            coins_credited INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
+        )
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_donations_telegram_id
+        ON donations(telegram_id, created_at DESC)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -308,6 +327,56 @@ def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:
 
     conn.close()
     return [dict(game) for game in games]
+
+
+# === Донаты / пополнения ===
+
+def add_donation(
+    telegram_id: int,
+    telegram_payment_charge_id: str,
+    provider_payment_charge_id: str,
+    amount_rub: int,
+    coins_credited: int,
+) -> int:
+    """Записать успешное пополнение и зачислить монеты на баланс (в одной транзакции)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """INSERT INTO donations
+               (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
+           VALUES (?, ?, ?, ?, ?)""",
+        (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
+    )
+
+    cursor.execute(
+        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?
+           RETURNING balance""",
+        (coins_credited, telegram_id)
+    )
+    new_balance = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    return new_balance[0] if new_balance else 0.0
+
+
+def get_user_donations(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    """Получить историю пополнений пользователя"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """SELECT * FROM donations
+           WHERE telegram_id = ?
+           ORDER BY created_at DESC
+           LIMIT ?""",
+        (telegram_id, limit)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 # === Очистка старых данных ===
