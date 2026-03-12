@@ -306,7 +306,9 @@ main { flex:1; overflow:hidden; position:relative; }
     position:absolute; inset:0;
     width:100%; height:100%;
     display:block;
+    will-change:contents;
 }
+
 
 .stage-info {
     position:absolute; top:12px; left:0; right:0;
@@ -347,6 +349,7 @@ main { flex:1; overflow:hidden; position:relative; }
     pointer-events:none;
     filter:drop-shadow(0 0 8px rgba(61,90,254,0.6));
     transition:filter .3s;
+    will-change:transform, left, top;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -915,7 +918,10 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 /* ════════════════════════════════════
    BALANCE
 ════════════════════════════════════ */
-let balance = 1_000_000;
+function loadBalance() {
+    try { const v = localStorage.getItem('bfg_balance'); return v !== null ? parseFloat(v) : 1_000_000; } catch(e) { return 1_000_000; }
+}
+let balance = loadBalance();
 const balEl = document.getElementById('balVal');
 
 function fmtFull(v)  { return '$' + Math.abs(v).toLocaleString('ru-RU', {maximumFractionDigits:2}); }
@@ -926,6 +932,7 @@ function fmtShort(v) {
 
 function changeBalance(delta) {
     balance += delta;
+    try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
     balEl.textContent = fmtShort(balance);
     balEl.classList.remove('fu','fd');
     void balEl.offsetWidth;
@@ -1014,6 +1021,26 @@ const R = {
 
 const rCtx = R.els.canvas.getContext('2d');
 
+/* Cached canvas dimensions — updated via ResizeObserver */
+let rCanvasW = 0, rCanvasH = 0;
+
+function rSyncCanvasSize() {
+    const cv = R.els.canvas;
+    const w = cv.offsetWidth, h = cv.offsetHeight;
+    if (cv.width !== w || cv.height !== h) {
+        cv.width  = w;
+        cv.height = h;
+        rCanvasW  = w;
+        rCanvasH  = h;
+        starsReady = false; // reinit stars on resize
+    }
+}
+
+/* Listen for size changes */
+if (window.ResizeObserver) {
+    new ResizeObserver(() => { rSyncCanvasSize(); }).observe(R.els.canvas);
+}
+
 /* Stars pool */
 const STARS = [];
 let starsReady = false;
@@ -1046,9 +1073,12 @@ function elapsed2n(t) {
 
 function rDraw(elapsed, crashed) {
     const cv = R.els.canvas;
-    cv.width  = cv.offsetWidth;
-    cv.height = cv.offsetHeight;
-    const W = cv.width, H = cv.height;
+    // Sync canvas size only if not already up-to-date (avoids layout reflow every frame)
+    if (cv.width !== cv.offsetWidth || cv.height !== cv.offsetHeight) {
+        rSyncCanvasSize();
+    }
+    const W = rCanvasW || cv.offsetWidth;
+    const H = rCanvasH || cv.offsetHeight;
     const cx = rCtx;
     const isDark = html.getAttribute('data-theme') === 'dark';
 
@@ -1113,30 +1143,27 @@ function rDraw(elapsed, crashed) {
         grad.addColorStop(0, fillTop);
         grad.addColorStop(1, 'transparent');
 
-        /* Fill */
-        cx.beginPath();
-        cx.moveTo(MX, H - MY);
+        /* Build curve path once, reuse for fill and stroke */
+        const curvePath = new Path2D();
+        curvePath.moveTo(MX, H - MY);
         for (let i = 0; i <= SEGS; i++) {
             const p = getCurvePoint(i / SEGS);
-            cx.lineTo(p.x, p.y);
+            curvePath.lineTo(p.x, p.y);
         }
         const tipP = getCurvePoint(n);
-        cx.lineTo(tipP.x, H - MY);
-        cx.closePath();
-        cx.fillStyle = grad;
-        cx.fill();
 
-        /* Stroke */
-        cx.beginPath();
-        cx.moveTo(MX, H - MY);
-        for (let i = 0; i <= SEGS; i++) {
-            const p = getCurvePoint(i / SEGS);
-            cx.lineTo(p.x, p.y);
-        }
+        /* Fill — close back to baseline */
+        const fillPath = new Path2D(curvePath);
+        fillPath.lineTo(tipP.x, H - MY);
+        fillPath.closePath();
+        cx.fillStyle = grad;
+        cx.fill(fillPath);
+
+        /* Stroke — same open path */
         cx.strokeStyle = lineColor;
         cx.lineWidth = 2;
         cx.lineJoin = 'round';
-        cx.stroke();
+        cx.stroke(curvePath);
 
         /* ── 4. Position rocket emoji at curve tip ── */
         const tip  = getCurvePoint(n);
@@ -1207,7 +1234,7 @@ function rStart() {
 
     R.active=true; R.cashedOut=false;
     R.mult=1.0; R.crashAt=rGenCrash(); R.bet=bet; R.t0=Date.now();
-    starsReady=false; // re-init stars for new canvas size
+    try { localStorage.setItem('bfg_r_bet', bet); } catch(e) {}
 
     R.els.btn.textContent='Забрать выигрыш';
     R.els.btn.className='btn btn-green';
@@ -1259,9 +1286,10 @@ document.getElementById('rActionBtn').addEventListener('click', ()=>{
     else if (!R.active) rStart();
 });
 
-/* Initial still draw */
+/* Initial still draw + restore saved bet */
 (function initRocketDraw() {
-    requestAnimationFrame(() => rDraw(0, false));
+    try { const b = localStorage.getItem('bfg_r_bet'); if (b) R.els.betInput.value = b; } catch(e) {}
+    requestAnimationFrame(() => { rSyncCanvasSize(); rDraw(0, false); });
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -1307,6 +1335,7 @@ function mStart() {
 
     Mine.active=true; Mine.safe.clear();
     Mine.bet=bet; Mine.mult=1.0;
+    try { localStorage.setItem('bfg_m_bet', bet); localStorage.setItem('bfg_m_mines', Mine.mineCount); } catch(e) {}
     mPlaceMines();
     mBuildGrid();
     document.getElementById('mGrid').classList.add('playing');
@@ -1420,7 +1449,25 @@ document.getElementById('mMineInput').addEventListener('input', function(){
     });
 });
 
-/* INIT */
+/* INIT — restore saved settings */
+(function restoreMineSettings() {
+    try {
+        const bet = localStorage.getItem('bfg_m_bet');
+        if (bet) document.getElementById('mBetInput').value = bet;
+        const mines = localStorage.getItem('bfg_m_mines');
+        if (mines) {
+            const v = parseInt(mines);
+            Mine.mineCount = v;
+            document.getElementById('mMineInput').value = v;
+            document.getElementById('mMinesBadge').textContent = v;
+            document.querySelectorAll('.mine-opt').forEach(b => {
+                if (parseInt(b.dataset.m) === v) b.classList.add('sel');
+                else b.classList.remove('sel');
+            });
+        }
+    } catch(e) {}
+})();
+
 balEl.textContent = fmtShort(balance);
 mBuildGrid();
 
@@ -1674,6 +1721,7 @@ function ldStart() {
     LD.locked     = false;
     LD.currentRow = -1;
     LD.mult       = 1.0;
+    try { localStorage.setItem('bfg_l_bet', bet); localStorage.setItem('bfg_l_stones', LD.stones); } catch(e) {}
 
     ldBuildGrid();
     ldSetStates(0);
@@ -1712,7 +1760,23 @@ document.querySelectorAll('.stone-opt').forEach(btn => {
 /* ── Быстрые ставки ── */
 bindQB('lSettings', 'lBetInput');
 
-/* ── Init ── */
+/* ── Init — restore saved settings ── */
+(function restoreLadderSettings() {
+    try {
+        const bet = localStorage.getItem('bfg_l_bet');
+        if (bet) LDel.betInput.value = bet;
+        const stones = localStorage.getItem('bfg_l_stones');
+        if (stones) {
+            const v = parseInt(stones);
+            LD.stones = v;
+            LDel.badge.textContent = v;
+            document.querySelectorAll('.stone-opt').forEach(b => {
+                if (parseInt(b.dataset.s) === v) b.classList.add('sel');
+                else b.classList.remove('sel');
+            });
+        }
+    } catch(e) {}
+})();
 ldBuildGrid();
 </script>
 </body>
