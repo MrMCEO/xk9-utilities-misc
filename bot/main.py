@@ -63,7 +63,13 @@ init_db()
 # === Вспомогательные функции ===
 
 def fmt_name(user: dict) -> str:
-    """Экранировать имя пользователя для HTML-сообщений."""
+    """
+    Экранировать имя пользователя для безопасного использования в HTML-сообщениях.
+
+    Использует html.escape() для защиты от XSS-атак: если имя содержит <, >, &, ", '
+    символы, они будут заменены на HTML-сущности (&lt;, &gt;, и т.д.).
+    Применяется при выводе названий пользователей в админ-панели и статистике.
+    """
     return html.escape(user.get("first_name") or user.get("username") or "Unknown")
 
 
@@ -550,16 +556,13 @@ async def cb_admin_stats(callback_query: CallbackQuery):
         await callback_query.answer("❌ Нет прав", show_alert=True)
         return
 
-    users = get_all_users()
+    s = get_global_stats()
     recent_games = get_recent_games(10)
-
-    total_balance = sum(u['balance'] for u in users)
-    total_users = len(users)
 
     stats_text = (
         f"📈 <b>Общая статистика:</b>\n\n"
-        f"👥 Пользователей: <b>{total_users}</b>\n"
-        f"💰 Общий баланс: <b>${total_balance:,.2f}</b>\n\n"
+        f"👥 Пользователей: <b>{s['total_users']}</b>\n"
+        f"🎮 Всего игр: <b>{s['total_games']}</b>\n\n"
         f"🎮 <b>Последние игры:</b>\n"
     )
 

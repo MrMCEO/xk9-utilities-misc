@@ -228,19 +228,6 @@ def get_donate_balance(telegram_id: int) -> int:
         return result["donate_balance"] if result else 0
 
 
-def add_donate_balance(telegram_id: int, amount: int) -> int:
-    """Пополнить донатный баланс (при оплате через Telegram Stars). Возвращает новый баланс."""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
-               WHERE telegram_id = ?
-               RETURNING donate_balance""",
-            (amount, telegram_id)
-        )
-        result = cursor.fetchone()
-    return result[0] if result else 0
-
 
 def update_donate_balance(telegram_id: int, delta: int) -> int:
     """
