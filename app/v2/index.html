@@ -1759,9 +1759,11 @@ if (tg.onEvent) {
 })();
 
 /* URL бота для HTTP API (передаётся ботом как ?api=...) */
-const botApiUrl = urlParams.get('api') || '';
+const botApiUrl = ''; // TODO: раскомментировать строку ниже когда настроен BOT_API_URL в .env
+// const botApiUrl = urlParams.get('api') || '';
 
-/* Отправить результат игры через HTTP API (работает из любого источника) */
+/* HTTP API для синхронизации баланса с БД. Раскомментировать когда BOT_API_URL настроен в bot/.env (VPS или ngrok туннель) */
+/*
 async function sendResultViaApi(game, stake, won, winnings, profit, mult) {
     if (!botApiUrl || !tg?.initData) return false;
     try {
@@ -1778,7 +1780,6 @@ async function sendResultViaApi(game, stake, won, winnings, profit, mult) {
         });
         if (!resp.ok) return false;
         const data = await resp.json();
-        /* Синхронизируем баланс с сервером если есть расхождение */
         if (data.balance !== undefined && data.balance !== balance) {
             const diff = data.balance - balance;
             balance = data.balance;
@@ -1789,9 +1790,12 @@ async function sendResultViaApi(game, stake, won, winnings, profit, mult) {
         return true;
     } catch(e) { return false; }
 }
+*/
 
 function sendResult(game, stake, won, winnings, profit, mult) {
-    sendResultViaApi(game, stake, won, winnings, profit, mult);
+    // Баланс обновляется только локально (localStorage).
+    // Для синхронизации с БД: раскомментировать sendResultViaApi выше
+    // и настроить BOT_API_URL в bot/.env
 }
 
 /* ════════════════════════════════════
