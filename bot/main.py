@@ -320,7 +320,8 @@ def get_main_keyboard(balance: float = 0, donate_balance: int = 0, is_admin: boo
     if BOT_API_URL:
         url += f"&api={BOT_API_URL}"
     if is_admin:
-        url += f"&admin=1&admindata={_build_admin_data()}"
+        url += "&admin=1"
+        # admindata не передаём — URL слишком длинный для кнопки (лимит 512 символов)
     builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=url))
     builder.button(text="🎰 Казино")
     builder.button(text="📊 Моя статистика")
@@ -385,7 +386,8 @@ async def cmd_start(message: Message, command: CommandObject):
     if BOT_API_URL:
         menu_url += f"&api={BOT_API_URL}"
     if is_admin:
-        menu_url += f"&admin=1&admindata={_build_admin_data()}"
+        menu_url += "&admin=1"
+        # admindata не передаём — URL слишком длинный для menu button (лимит 512 символов)
     try:
         await bot.set_chat_menu_button(
             chat_id=message.from_user.id,
@@ -414,7 +416,8 @@ async def cmd_play(message: Message):
     if BOT_API_URL:
         play_url += f"&api={BOT_API_URL}"
     if message.from_user.id in ADMIN_IDS:
-        play_url += f"&admin=1&admindata={_build_admin_data()}"
+        play_url += "&admin=1"
+        # admindata не передаём — URL слишком длинный для inline кнопки (лимит 512 символов)
     await message.answer(
         "🎮 <b>BFG Casino — Web App</b>\n\n"
         "🚀 Ракета · 💣 Сапер\n"
