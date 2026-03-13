@@ -1791,18 +1791,7 @@ async function sendResultViaApi(game, stake, won, winnings, profit, mult) {
 }
 
 function sendResult(game, stake, won, winnings, profit, mult) {
-    /* Приоритет: HTTP API (работает из меню-кнопки и любого источника) */
     sendResultViaApi(game, stake, won, winnings, profit, mult);
-    /* Fallback: sendData (работает только из reply-кнопки клавиатуры, закрывает приложение) */
-    if (!botApiUrl) {
-        try {
-            tg.sendData && tg.sendData(JSON.stringify({
-                type: 'game_result', game, stake, won,
-                winnings, profit, multiplier: mult, user: tgUser,
-                wallet: activeWallet
-            }));
-        } catch(e) {}
-    }
 }
 
 /* ════════════════════════════════════
@@ -3085,11 +3074,11 @@ applyRipples();
     }
 
     /* ── Управление: Обновить ── */
-    document.getElementById('adRefreshBtn').addEventListener('click', () => {
+    document.getElementById('adRefreshBtn').addEventListener('click', async () => {
         haptic('medium');
-        try {
-            tg.sendData && tg.sendData(JSON.stringify({ action: 'admin_refresh' }));
-        } catch(e) {}
+        if (botApiUrl) {
+            try { await fetch(botApiUrl + '/api/admin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'admin_refresh' }) }); } catch(e) {}
+        }
     });
 
     /* ── Maintenance toggle ── */
@@ -3100,17 +3089,17 @@ applyRipples();
     }
     updateMaintBtn();
 
-    maintBtn.addEventListener('click', () => {
+    maintBtn.addEventListener('click', async () => {
         maintenanceOn = !maintenanceOn;
         updateMaintBtn();
         haptic('medium');
-        try {
-            tg.sendData && tg.sendData(JSON.stringify({ action: 'admin_maintenance_toggle' }));
-        } catch(e) {}
+        if (botApiUrl) {
+            try { await fetch(botApiUrl + '/api/admin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'admin_maintenance_toggle' }) }); } catch(e) {}
+        }
     });
 
     /* ── Управление балансом ── */
-    document.getElementById('adBalBtn').addEventListener('click', () => {
+    document.getElementById('adBalBtn').addEventListener('click', async () => {
         const userId = parseInt(document.getElementById('adBalUserId').value);
         const amount = parseFloat(document.getElementById('adBalAmount').value);
         if (!userId || isNaN(amount)) {
@@ -3118,13 +3107,9 @@ applyRipples();
             return;
         }
         haptic('medium');
-        try {
-            tg.sendData && tg.sendData(JSON.stringify({
-                action: 'admin_balance',
-                user_id: userId,
-                amount: amount
-            }));
-        } catch(e) {}
+        if (botApiUrl) {
+            try { await fetch(botApiUrl + '/api/admin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'admin_balance', user_id: userId, amount: amount }) }); } catch(e) {}
+        }
         openModal('✅', 'Отправлено', '', 'Запрос на изменение баланса', null);
         autoCloseTimer = setTimeout(closeModal, 1500);
     });
