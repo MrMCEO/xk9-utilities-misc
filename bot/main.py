@@ -52,6 +52,7 @@ from database import (
     get_maintenance,
     get_user_by_username,
     get_bets_history,
+    get_activity_24h,
 )
 
 # Настройка логирования
@@ -137,24 +138,24 @@ def _build_admin_data() -> str:
         "bets_today": stats["bets_today"],
         "revenue_today": stats["revenue_today"],
         "active_promos": sum(1 for p in promos if p["used_count"] < p["max_uses"]),
-        "activity_24h": stats["bets_today"],
+        "activity_24h": get_activity_24h(),
         "promo_codes": [
             {"code": p["code"], "bonus": p["bonus"], "max_uses": p["max_uses"], "used_count": p["used_count"]}
             for p in promos
         ],
         "recent_bets": [
             {
-                "user": r.get("first_name") or r.get("username") or "Unknown",
+                "player": r.get("first_name") or r.get("username") or "Unknown",
                 "game": r["game_type"],
                 "stake": r["stake"],
-                "winnings": r["winnings"],
-                "result": r["result"],
+                "won": r["result"] == "win",
+                "multiplier": r.get("multiplier", 1.0),
             }
             for r in recent[:10]
         ],
         "maintenance": maint,
     }
-    return base64.urlsafe_b64encode(json.dumps(admin_data, ensure_ascii=False).encode()).decode()
+    return base64.b64encode(json.dumps(admin_data, ensure_ascii=False).encode()).decode()
 
 
 def get_main_keyboard(balance: float = 0, donate_balance: int = 0, is_admin: bool = False) -> ReplyKeyboardMarkup:

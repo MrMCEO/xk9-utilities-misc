@@ -796,3 +796,26 @@ def get_bets_history(limit: int = 50, game_type: str = None) -> List[Dict[str, A
                 (limit,)
             )
         return [dict(row) for row in cursor.fetchall()]
+
+
+def get_activity_24h() -> List[int]:
+    """Количество ставок по часам за последние 24 часа (массив из 24 элементов для графика)."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT strftime('%H', created_at) as hour, COUNT(*) as cnt
+            FROM games
+            WHERE created_at >= datetime('now', '-24 hours')
+            GROUP BY hour
+        """)
+        hourly = {int(row["hour"]): row["cnt"] for row in cursor.fetchall()}
+
+    from datetime import datetime, timezone
+    now_hour = datetime.now(timezone.utc).hour
+
+    # Массив: [24 часа назад, 23 часа назад, ..., текущий час]
+    result = []
+    for i in range(24):
+        h = (now_hour - 23 + i) % 24
+        result.append(hourly.get(h, 0))
+    return result
