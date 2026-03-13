@@ -582,6 +582,10 @@ async def cmd_setbalance(message: Message):
         user_id = int(args[1])
         amount = float(args[2])
 
+        if amount < 0:
+            await message.answer("❌ Баланс не может быть отрицательным.")
+            return
+
         new_balance = set_balance(user_id, amount)
         await message.answer(f"✅ Баланс пользователя {user_id} установлен на ${new_balance:,.2f}")
 

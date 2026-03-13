@@ -10,6 +10,7 @@ def get_connection() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-8000")  # 8MB кэш
+    conn.execute("PRAGMA foreign_keys = ON")  # ON DELETE CASCADE и другие FK-ограничения
     return conn
 
 
@@ -193,6 +194,8 @@ def update_balance_checked(telegram_id: int, amount: float) -> tuple[bool, float
 
 def set_balance(telegram_id: int, amount: float) -> float:
     """Установить баланс пользователя (один запрос через RETURNING)"""
+    if amount < 0:
+        raise ValueError(f"set_balance: отрицательный баланс недопустим (amount={amount})")
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
