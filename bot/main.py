@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Инициализация бота и диспетчера
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
 
@@ -106,7 +106,6 @@ async def cmd_start(message: Message, command: CommandObject):
         f"🚀 Запускайте игру и испытайте удачу!\n"
         f"Нажмите кнопку ниже 👇",
         reply_markup=get_main_keyboard(),
-        parse_mode='HTML'
     )
 
 
@@ -120,8 +119,7 @@ async def cmd_play(message: Message):
         "Выбирай игру и испытай удачу!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL))]
-        ]),
-        parse_mode='HTML'
+        ])
     )
 
 
@@ -148,14 +146,14 @@ async def cmd_help(message: Message):
         "/admin - Панель администратора\n"
         "/setbalance - Изменить баланс"
     )
-    await message.answer(help_text, parse_mode='HTML')
+    await message.answer(help_text)
 
 
 @dp.message(F.text == "💰 Баланс")
 async def cmd_balance(message: Message):
     """Показать баланс"""
     balance = get_user_balance(message.from_user.id)
-    await message.answer(f"💰 <b>Ваш баланс:</b> ${balance:,.2f}", parse_mode='HTML')
+    await message.answer(f"💰 <b>Ваш баланс:</b> ${balance:,.2f}")
 
 
 @dp.message(F.text == "📊 Моя статистика")
@@ -178,7 +176,7 @@ async def cmd_stats(message: Message):
         f"{'🟢' if stats['profit'] >= 0 else '🔴'} Профит: <b>${stats['profit']:,.2f}</b>"
     )
 
-    await message.answer(stats_text, parse_mode='HTML')
+    await message.answer(stats_text)
 
 
 @dp.message(F.text == "📜 История игр")
@@ -199,7 +197,7 @@ async def cmd_history(message: Message):
             f"Выигрыш: ${game['winnings']:.2f}\n"
         )
 
-    await message.answer(history_text, parse_mode='HTML')
+    await message.answer(history_text)
 
 
 # === Обработка данных от Web App ===
@@ -361,8 +359,7 @@ async def cmd_admin(message: Message):
 
     await message.answer(
         "🔧 <b>Панель администратора</b>",
-        reply_markup=get_admin_keyboard(),
-        parse_mode='HTML'
+        reply_markup=get_admin_keyboard()
     )
 
 
@@ -387,7 +384,7 @@ async def cb_admin_users(callback_query: CallbackQuery):
             f"${user['balance']:,.2f}\n"
         )
 
-    await callback_query.message.answer(users_text, parse_mode='HTML')
+    await callback_query.message.answer(users_text)
     await callback_query.answer()
 
 
@@ -419,7 +416,7 @@ async def cb_admin_stats(callback_query: CallbackQuery):
             f"${game['stake']:.2f} → ${game['winnings']:.2f}\n"
         )
 
-    await callback_query.message.answer(stats_text, parse_mode='HTML')
+    await callback_query.message.answer(stats_text)
     await callback_query.answer()
 
 
@@ -434,8 +431,7 @@ async def cb_admin_balance(callback_query: CallbackQuery):
         "💵 <b>Изменение баланса</b>\n\n"
         "Используйте команду:\n"
         "<code>/setbalance &lt;user_id&gt; &lt;amount&gt;</code>\n\n"
-        "Пример: <code>/setbalance 123456789 50000</code>",
-        parse_mode='HTML'
+        "Пример: <code>/setbalance 123456789 50000</code>"
     )
     await callback_query.answer()
 
@@ -457,7 +453,7 @@ async def cmd_setbalance(message: Message):
         amount = float(args[2])
 
         new_balance = set_balance(user_id, amount)
-        await message.answer(f"✅ Баланс пользователя {user_id} установлен на ${new_balance:,.2f}", parse_mode='HTML')
+        await message.answer(f"✅ Баланс пользователя {user_id} установлен на ${new_balance:,.2f}")
 
     except (ValueError, IndexError):
         await message.answer("❌ Ошибка. Используйте: /setbalance <user_id> <amount>")

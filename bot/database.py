@@ -1,5 +1,6 @@
 import sqlite3
 from typing import Optional, List, Dict, Any
+from contextlib import contextmanager
 from config import DB_PATH
 
 
@@ -15,36 +16,34 @@ def get_connection() -> sqlite3.Connection:
 
 def init_db() -> None:
     """Инициализация базы данных"""
-    conn = get_connection()
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
 
-    # Таблица пользователей
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            telegram_id INTEGER PRIMARY KEY,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            balance REAL DEFAULT 1000000,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                telegram_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                balance REAL DEFAULT 1000000,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-    # Таблица игр
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS games (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER NOT NULL,
-            game_type TEXT NOT NULL,
-            stake REAL NOT NULL,
-            result TEXT NOT NULL,
-            winnings REAL DEFAULT 0,
-            multiplier REAL DEFAULT 1.0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                game_type TEXT NOT NULL,
+                stake REAL NOT NULL,
+                result TEXT NOT NULL,
+                winnings REAL DEFAULT 0,
+                multiplier REAL DEFAULT 1.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
+            )
+        """)
 
     # Индекс для быстрого поиска по пользователю и дате
     cursor.execute("""
@@ -125,26 +124,20 @@ def get_or_create_user(
 
 def get_user(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Получить пользователя по ID"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-    user = cursor.fetchone()
-
-    conn.close()
-    return dict(user) if user else None
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
+        return dict(user) if user else None
 
 
 def get_user_balance(telegram_id: int) -> float:
     """Получить баланс пользователя"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
-    result = cursor.fetchone()
-
-    conn.close()
-    return result["balance"] if result else 0.0
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
+        result = cursor.fetchone()
+        return result["balance"] if result else 0.0
 
 
 def update_balance(telegram_id: int, amount: float) -> float:
@@ -215,14 +208,11 @@ def set_balance(telegram_id: int, amount: float) -> float:
 
 def get_all_users() -> List[Dict[str, Any]]:
     """Получить всех пользователей"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM users ORDER BY created_at DESC")
-    users = cursor.fetchall()
-
-    conn.close()
-    return [dict(user) for user in users]
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users ORDER BY created_at DESC")
+        users = cursor.fetchall()
+        return [dict(user) for user in users]
 
 
 # === Игры ===
@@ -275,8 +265,18 @@ def get_user_games(telegram_id: int, limit: int = 15) -> List[Dict[str, Any]]:
 
 def get_user_stats(telegram_id: int) -> Dict[str, Any]:
     """Получить статистику пользователя по играм"""
-    conn = get_connection()
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                COUNT(*) as total_games,
+                SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 'lose' THEN 1 ELSE 0 END) as losses,
+                SUM(stake) as total_staked,
+                SUM(winnings) as total_winnings
+            FROM games
+            WHERE telegram_id = ?
+        """, (telegram_id,))
 
     cursor.execute("""
         SELECT
@@ -292,22 +292,22 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
     stats = cursor.fetchone()
     conn.close()
 
-    if stats and stats["total_games"] > 0:
-        stats = dict(stats)
-        stats["win_rate"] = (stats["wins"] / stats["total_games"]) * 100
-        stats["profit"] = stats["total_winnings"] - stats["total_staked"]
-    else:
-        stats = {
-            "total_games": 0,
-            "wins": 0,
-            "losses": 0,
-            "total_staked": 0,
-            "total_winnings": 0,
-            "win_rate": 0,
-            "profit": 0
-        }
+        if stats and stats["total_games"] > 0:
+            stats = dict(stats)
+            stats["win_rate"] = (stats["wins"] / stats["total_games"]) * 100
+            stats["profit"] = stats["total_winnings"] - stats["total_staked"]
+        else:
+            stats = {
+                "total_games": 0,
+                "wins": 0,
+                "losses": 0,
+                "total_staked": 0,
+                "total_winnings": 0,
+                "win_rate": 0,
+                "profit": 0
+            }
 
-    return stats
+        return stats
 
 
 def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:
