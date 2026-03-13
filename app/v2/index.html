@@ -2138,10 +2138,10 @@ function rDraw(elapsed, crashed) {
         const prev = getCurvePoint(Math.max(0, n - 0.04));
         const dx = tip.x - prev.x;
         const dy = tip.y - prev.y; // negative = going up
-        const angleRad = Math.atan2(-dy, dx); // angle above horizontal
-        // 🚀 default points up = 0°. Rotate so it faces direction of travel:
-        // When angleRad=90°(straight up) rotate=0°, when angleRad=0°(horizontal) rotate=-90°
-        const rotateDeg = -(90 - angleRad * 180 / Math.PI);
+        const angleRad = Math.atan2(-dy, dx); // angle above horizontal (radians)
+        // 🚀 emoji default orientation ≈ 45° (upper-right).
+        // Rotate so it faces direction of travel (tangent to curve):
+        const rotateDeg = -(45 - angleRad * 180 / Math.PI);
 
         const el = R.els.rocket;
         const ew = 26; // emoji visual width approx
@@ -2161,7 +2161,7 @@ function rDraw(elapsed, crashed) {
         const el = R.els.rocket;
         el.style.left      = '18px';
         el.style.top       = (H - 38) + 'px';
-        el.style.transform = 'rotate(-45deg)';
+        el.style.transform = 'rotate(0deg)';
         el.style.display   = 'block';
         el.style.filter    = 'drop-shadow(0 0 8px rgba(61,90,254,0.5))';
     }
