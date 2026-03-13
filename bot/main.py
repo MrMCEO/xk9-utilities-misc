@@ -217,40 +217,66 @@ async def cmd_history(message: Message):
 
 # === Обработка данных от Web App ===
 
+MAX_MULTIPLIER = 1000.0  # Максимально допустимый множитель от Web App
+
+
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
     """Обработка данных от Web App (результаты игр)"""
     try:
         data = json.loads(message.web_app_data.data)
-        
+
         if data.get('type') == 'game_result':
             telegram_id = message.from_user.id
             game_type = data.get('game', 'rocket')
-            stake = float(data.get('stake', 0))
-            won = data.get('won', False)
-            totalWinnings = float(data.get('winnings', 0))
-            profit = data.get('profit', 0)
-            multiplier = data.get('multiplier', 1.0)
-            
+            won = bool(data.get('won', False))
+
+            # Принимаем от клиента только stake и multiplier — остальное считаем сами
+            try:
+                stake = float(data.get('stake', 0))
+                multiplier = float(data.get('multiplier', 1.0))
+            except (TypeError, ValueError):
+                logger.warning(f"Некорректные числовые данные от Web App: user={telegram_id}, data={data}")
+                return
+
+            # Валидация ставки
+            if stake <= 0:
+                logger.warning(f"Нулевая или отрицательная ставка от Web App: user={telegram_id}, stake={stake}")
+                return
+
+            # Валидация множителя
+            if multiplier < 0 or multiplier > MAX_MULTIPLIER:
+                logger.warning(f"Подозрительный множитель от Web App: user={telegram_id}, multiplier={multiplier}")
+                return
+
+            # Проверяем достаточность баланса и списываем ставку атомарно
+            success, balance_after = update_balance_checked(telegram_id, -stake)
+            if not success:
+                logger.warning(f"Недостаточно средств у user={telegram_id}: stake={stake}, balance={balance_after}")
+                return
+
+            # Пересчитываем выигрыш на стороне бота
+            winnings = round(stake * multiplier, 2) if won else 0.0
+            profit = winnings - stake
+
+            # Начисляем выигрыш
+            if winnings > 0:
+                update_balance(telegram_id, winnings)
+
             add_game(
                 telegram_id=telegram_id,
                 game_type=game_type,
                 stake=stake,
                 result='win' if won else 'lose',
-                winnings=totalWinnings,
+                winnings=winnings,
                 multiplier=multiplier
             )
-            
-            if won:
-                update_balance(telegram_id, profit)
-            else:
-                update_balance(telegram_id, -stake)
-            
+
             logger.info(
                 f"Игра: {game_type}, User: {telegram_id}, "
-                f"Ставка: {stake}, Выигрыш: {totalWinnings}, Win: {won}"
+                f"Ставка: {stake}, Множитель: {multiplier}, Выигрыш: {winnings}, Win: {won}"
             )
-            
+
     except json.JSONDecodeError as e:
         logger.error(f"Ошибка парсинга данных от Web App: {e}")
     except Exception as e:
