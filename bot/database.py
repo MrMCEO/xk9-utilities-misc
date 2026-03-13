@@ -469,3 +469,38 @@ def cleanup_old_games(days: int = 30) -> int:
         )
         deleted = cursor.rowcount
     return deleted
+
+
+def get_global_stats() -> Dict[str, Any]:
+    """Глобальная статистика для администраторов"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM games")
+        total_games = cursor.fetchone()[0]
+
+        cursor.execute("""
+            SELECT u.first_name, u.username, COUNT(g.id) as game_count
+            FROM games g
+            JOIN users u ON g.telegram_id = u.telegram_id
+            GROUP BY g.telegram_id
+            ORDER BY game_count DESC
+            LIMIT 3
+        """)
+        top_players = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount_rub), 0) FROM donations")
+        row = cursor.fetchone()
+        total_donations = row[0]
+        total_stars = row[1]
+
+    return {
+        "total_users": total_users,
+        "total_games": total_games,
+        "top_players": top_players,
+        "total_donations": total_donations,
+        "total_stars": total_stars,
+    }

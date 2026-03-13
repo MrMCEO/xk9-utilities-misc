@@ -37,6 +37,7 @@ from database import (
     add_donate_balance,
     update_donate_balance,
     update_donate_balance_checked,
+    get_global_stats,
 )
 
 # Настройка логирования
@@ -579,6 +580,33 @@ async def cmd_setbalance(message: Message):
 
     except (ValueError, IndexError):
         await message.answer("❌ Ошибка. Используйте: /setbalance <user_id> <amount>")
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: Message):
+    """Расширенная статистика для администраторов"""
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ У вас нет прав администратора.")
+        return
+
+    s = get_global_stats()
+
+    top = ""
+    for i, p in enumerate(s["top_players"], 1):
+        name = p.get("first_name") or p.get("username") or "Unknown"
+        top += f"  {i}. {name} — {p['game_count']} игр\n"
+    if not top:
+        top = "  нет данных\n"
+
+    text = (
+        f"📊 <b>Статистика BFG Casino</b>\n\n"
+        f"👥 Пользователей: <b>{s['total_users']}</b>\n"
+        f"🎮 Всего игр: <b>{s['total_games']}</b>\n\n"
+        f"🏆 <b>Топ-3 игрока:</b>\n{top}\n"
+        f"💸 Донатов: <b>{s['total_donations']}</b> "
+        f"на <b>{s['total_stars']:,} ⭐</b>"
+    )
+    await message.answer(text)
 
 
 # === Донаты / пополнение баланса ===
