@@ -928,6 +928,63 @@ main { flex:1; overflow:hidden; position:relative; }
 }
 .dep-success-sub { font-size:12px; color:var(--muted); margin-bottom:18px; }
 
+/* ═══════════════════════════════════════════════════
+   RIPPLE EFFECT
+═══════════════════════════════════════════════════ */
+.ripple-effect {
+    position:absolute;
+    border-radius:50%;
+    background:rgba(255,255,255,0.28);
+    transform:scale(0);
+    animation:rippleAnim .5s linear;
+    pointer-events:none;
+}
+@keyframes rippleAnim {
+    to { transform:scale(4); opacity:0; }
+}
+
+/* ═══════════════════════════════════════════════════
+   CARD ENTRANCE ANIMATION (при смене вкладки)
+═══════════════════════════════════════════════════ */
+@keyframes cardEnter {
+    0%   { opacity:0; transform:translateY(14px) scale(0.97); }
+    100% { opacity:1; transform:translateY(0) scale(1); }
+}
+.screen.active .card {
+    animation:cardEnter .28s cubic-bezier(0.25,0.46,0.45,0.94) both;
+}
+.screen.active .card:nth-child(1) { animation-delay:.04s; }
+.screen.active .card:nth-child(2) { animation-delay:.09s; }
+.screen.active .card:nth-child(3) { animation-delay:.14s; }
+
+/* ═══════════════════════════════════════════════════
+   MULTIPLIER PULSE (Сапёр и Лесенка)
+═══════════════════════════════════════════════════ */
+.stat-val.pop {
+    animation:vPop .38s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes vPop {
+    0%   { transform:scale(1); }
+    40%  { transform:scale(1.42); color:var(--gold); }
+    70%  { transform:scale(0.94); }
+    100% { transform:scale(1); }
+}
+
+/* Pulse-обводка вокруг чипа множителя при изменении */
+.stat-chip.mult-pulse {
+    animation:chipPulse .35s ease-out;
+}
+@keyframes chipPulse {
+    0%   { box-shadow:0 0 0 0 rgba(245,166,35,0.55); }
+    60%  { box-shadow:0 0 0 8px rgba(245,166,35,0); }
+    100% { box-shadow:none; }
+}
+
+/* ═══════════════════════════════════════════════════
+   BALANCE COUNTER ANIMATION
+═══════════════════════════════════════════════════ */
+.bal-val.counting { animation:none; }
+
 /* Stone preset buttons (reuse mine-opt style) */
 .stone-opt {
     flex:1; padding:10px 3px;
@@ -1203,6 +1260,31 @@ main { flex:1; overflow:hidden; position:relative; }
 
 <script>
 /* ════════════════════════════════════
+   RIPPLE HELPER
+════════════════════════════════════ */
+function addRipple(btn) {
+    btn.style.overflow = 'hidden';
+    btn.style.position = 'relative';
+    btn.addEventListener('pointerdown', function(e) {
+        const r = this.getBoundingClientRect();
+        const size = Math.max(r.width, r.height) * 1.4;
+        const x = e.clientX - r.left - size / 2;
+        const y = e.clientY - r.top  - size / 2;
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple-effect';
+        ripple.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+        this.appendChild(ripple);
+        ripple.addEventListener('animationend', () => ripple.remove(), { once: true });
+    });
+}
+/* Применить ripple ко всем кнопкам-действиям (скрипт в конце body — DOM уже готов) */
+function applyRipples() {
+    document.querySelectorAll('.btn, .modal-cta, .dep-manual-btn, .deposit-btn').forEach(btn => {
+        if (!btn.dataset.ripple) { addRipple(btn); btn.dataset.ripple = '1'; }
+    });
+}
+
+/* ════════════════════════════════════
    TELEGRAM
 ════════════════════════════════════ */
 const tg     = window.Telegram?.WebApp || {};
@@ -1255,17 +1337,34 @@ function fmtShort(v) {
 }
 function fmtDonate(v) { return '⭐ ' + Math.round(v).toLocaleString('ru-RU'); }
 
+/* Анимированный счётчик: прокручивает число от startVal до endVal за duration мс */
+function animateCounter(el, startVal, endVal, duration, fmtFn) {
+    const startTime = performance.now();
+    const diff = endVal - startVal;
+    function step(now) {
+        const elapsed = Math.min(now - startTime, duration);
+        const t = elapsed / duration;
+        /* easeOutQuart */
+        const eased = 1 - Math.pow(1 - t, 4);
+        el.textContent = fmtFn(startVal + diff * eased);
+        if (elapsed < duration) requestAnimationFrame(step);
+        else el.textContent = fmtFn(endVal);
+    }
+    requestAnimationFrame(step);
+}
+
 function changeBalance(delta) {
     if (activeWallet === 'donate') {
-        /* Защита от отрицательного донатного баланса при списании */
+        const prev = donateBalance;
         if (delta < 0 && donateBalance + delta < 0) donateBalance = 0;
         else donateBalance += delta;
         try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
-        balDonEl.textContent = fmtDonate(donateBalance);
+        animateCounter(balDonEl, prev, donateBalance, 600, v => '⭐ ' + Math.round(v).toLocaleString('ru-RU'));
     } else {
+        const prev = balance;
         balance += delta;
         try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
-        balEl.textContent = fmtShort(balance);
+        animateCounter(balEl, prev, balance, 700, fmtShort);
         balEl.classList.remove('fu','fd');
         void balEl.offsetWidth;
         balEl.classList.add(delta >= 0 ? 'fu' : 'fd');
@@ -1371,47 +1470,89 @@ let confParts = [], confRAF = null;
 
 const CONF_COLORS = ['#3d5afe','#00e676','#f5a623','#ff6b9d','#a78bfa','#34d399'];
 
+/* Создать одну частицу конфетти */
+function confMakeParticle(W, H) {
+    const shapes = ['rect', 'circle', 'triangle'];
+    return {
+        x:      Math.random() * W,
+        y:      -10 - Math.random() * 100,
+        vx:     (Math.random() - 0.5) * 4,
+        vy:     1.8 + Math.random() * 3.2,
+        rot:    Math.random() * 360,
+        vrot:   (Math.random() - 0.5) * 9,
+        size:   5 + Math.random() * 7,
+        aspect: 0.35 + Math.random() * 0.45,   // ширина/высота
+        color:  CONF_COLORS[Math.floor(Math.random() * CONF_COLORS.length)],
+        shape:  shapes[Math.floor(Math.random() * shapes.length)],
+        swing:  Math.random() * Math.PI * 2,    // фаза горизонтального качания
+        swingA: 0.5 + Math.random() * 1.2,      // амплитуда качания
+        swingF: 1.5 + Math.random() * 2,        // частота качания
+        life:   1.0
+    };
+}
+
 function confStart() {
     confCv.width  = window.innerWidth;
     confCv.height = window.innerHeight;
     confParts = [];
-    for (let i = 0; i < 90; i++) {
-        confParts.push({
-            x:     Math.random() * confCv.width,
-            y:     -10 - Math.random() * 80,
-            vx:    (Math.random() - 0.5) * 3.5,
-            vy:    2.5 + Math.random() * 3.5,
-            rot:   Math.random() * 360,
-            vrot:  (Math.random() - 0.5) * 8,
-            w:     6 + Math.random() * 6,
-            h:     3 + Math.random() * 3,
-            color: CONF_COLORS[Math.floor(Math.random() * CONF_COLORS.length)],
-            life:  1.0
-        });
+    for (let i = 0; i < 110; i++) {
+        confParts.push(confMakeParticle(confCv.width, confCv.height));
     }
     confCv.classList.add('active');
     if (confRAF) cancelAnimationFrame(confRAF);
     confLoop();
 }
 
+function confDrawParticle(ctx, p) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot * Math.PI / 180);
+    ctx.fillStyle = p.color;
+
+    const hw = p.size / 2;
+    const hh = p.size * p.aspect / 2;
+
+    if (p.shape === 'circle') {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, hw, hh, 0, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (p.shape === 'triangle') {
+        ctx.beginPath();
+        ctx.moveTo(0, -hw);
+        ctx.lineTo(hw, hw * 0.7);
+        ctx.lineTo(-hw, hw * 0.7);
+        ctx.closePath();
+        ctx.fill();
+    } else {
+        ctx.fillRect(-hw, -hh, p.size, p.size * p.aspect);
+    }
+    ctx.restore();
+}
+
 function confLoop() {
     confCtx.clearRect(0, 0, confCv.width, confCv.height);
+    const now = performance.now() / 1000;
     let alive = false;
+
     for (const p of confParts) {
-        p.x   += p.vx;
+        /* Горизонтальное качание (имитация воздуха) */
+        p.x   += p.vx + Math.sin(now * p.swingF + p.swing) * p.swingA;
         p.y   += p.vy;
         p.rot += p.vrot;
-        p.vy  += 0.08; // gravity
-        if (p.y < confCv.height + 20) alive = true;
-        if (p.y > confCv.height + 20) continue;
-        confCtx.save();
-        confCtx.globalAlpha = Math.min(1, p.life);
-        confCtx.translate(p.x, p.y);
-        confCtx.rotate(p.rot * Math.PI / 180);
-        confCtx.fillStyle = p.color;
-        confCtx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
-        confCtx.restore();
+        p.vy  += 0.07; // гравитация
+        /* Постепенное fade-out в нижней трети экрана */
+        const fadeStart = confCv.height * 0.70;
+        if (p.y > fadeStart) {
+            p.life = Math.max(0, 1 - (p.y - fadeStart) / (confCv.height * 0.35));
+        }
+        if (p.y < confCv.height + 30 && p.life > 0) alive = true;
+        if (p.y > confCv.height + 30 || p.life <= 0) continue;
+
+        confCtx.globalAlpha = p.life;
+        confDrawParticle(confCtx, p);
     }
+    confCtx.globalAlpha = 1;
+
     if (alive) {
         confRAF = requestAnimationFrame(confLoop);
     } else {
@@ -1905,7 +2046,10 @@ function mUpdateStats() {
     const prev=multEl.textContent;
     multEl.textContent='x'+Mine.mult.toFixed(2);
     document.getElementById('mOpened').textContent=Mine.safe.size;
-    if(prev!==multEl.textContent){ multEl.classList.remove('pop'); void multEl.offsetWidth; multEl.classList.add('pop'); }
+    if(prev!==multEl.textContent){
+        multEl.classList.remove('pop'); void multEl.offsetWidth; multEl.classList.add('pop');
+        if(chip){ chip.classList.remove('mult-pulse'); void chip.offsetWidth; chip.classList.add('mult-pulse'); }
+    }
     if(chip) chip.classList.toggle('mult-high', Mine.mult >= 3);
 }
 function mUpdateNext() {
@@ -2153,7 +2297,10 @@ function ldUpdateStats() {
     LDel.mult.classList.remove('pop'); void LDel.mult.offsetWidth; LDel.mult.classList.add('pop');
 
     const chip = LDel.mult.closest('.stat-chip');
-    if (chip) chip.classList.toggle('mult-high', LD.mult >= 3);
+    if (chip) {
+        chip.classList.remove('mult-pulse'); void chip.offsetWidth; chip.classList.add('mult-pulse');
+        chip.classList.toggle('mult-high', LD.mult >= 3);
+    }
 
     const nextRow = LD.currentRow + 1;
     if (nextRow < LD_ROWS) {
@@ -2411,6 +2558,7 @@ bindQB('lSettings', 'lBetInput');
     } catch(e) {}
 })();
 ldBuildGrid();
+applyRipples();
 </script>
 </body>
 </html>
