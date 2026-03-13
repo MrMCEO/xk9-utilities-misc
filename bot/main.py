@@ -40,6 +40,16 @@ from database import (
     update_donate_balance_checked,
     get_global_stats,
     get_leaderboard,
+    ban_user,
+    is_user_banned,
+    get_admin_stats,
+    create_promo,
+    use_promo,
+    get_promos,
+    set_maintenance,
+    get_maintenance,
+    get_user_by_username,
+    get_bets_history,
 )
 
 # Настройка логирования
@@ -55,6 +65,15 @@ dp = Dispatcher()
 
 class DonateStates(StatesGroup):
     waiting_for_custom_amount = State()
+
+
+class AdminStates(StatesGroup):
+    waiting_for_user_id = State()        # ввод ID/username для изменения баланса
+    waiting_for_amount = State()         # ввод суммы баланса
+    waiting_for_broadcast_text = State() # ввод текста рассылки
+    waiting_for_promo_code = State()     # ввод кода промо
+    waiting_for_promo_bonus = State()    # ввод бонуса промо
+    waiting_for_promo_max_uses = State() # ввод макс. использований промо
 
 # Инициализация БД при старте
 init_db()
@@ -122,9 +141,14 @@ def get_main_keyboard(balance: float = 0, donate_balance: int = 0) -> ReplyKeybo
 def get_admin_keyboard() -> InlineKeyboardMarkup:
     """Админ панель"""
     builder = InlineKeyboardBuilder()
-    builder.button(text="👥 Все пользователи", callback_data="admin_users")
-    builder.button(text="📈 Общая статистика", callback_data="admin_stats")
-    builder.button(text="💵 Изменить баланс", callback_data="admin_balance")
+    builder.button(text="📊 Статистика", callback_data="admin_stats")
+    builder.button(text="👥 Пользователи", callback_data="admin_users")
+    builder.button(text="💰 Управление балансом", callback_data="admin_balance")
+    builder.button(text="📢 Рассылка", callback_data="admin_broadcast")
+    builder.button(text="🎁 Промо-коды", callback_data="admin_promos")
+    builder.button(text="🔧 Режим обслуживания", callback_data="admin_maintenance")
+    builder.button(text="🏆 Топ игроков", callback_data="admin_top")
+    builder.adjust(2, 2, 2, 1)
     return builder.as_markup()
 
 
@@ -320,10 +344,21 @@ async def handle_webapp_data(message: Message):
     целые монеты, в отличие от основного баланса (float).
     """
     try:
+        telegram_id = message.from_user.id
+
+        # Проверка бана
+        if is_user_banned(telegram_id):
+            await message.answer("🚫 Ваш аккаунт заблокирован. Обратитесь к администратору.")
+            return
+
+        # Проверка режима обслуживания (админы могут играть)
+        if get_maintenance() and telegram_id not in ADMIN_IDS:
+            await message.answer("🔧 Казино на техническом обслуживании. Попробуйте позже.")
+            return
+
         data = json.loads(message.web_app_data.data)
 
         if data.get('type') == 'game_result':
-            telegram_id = message.from_user.id
             game_type = data.get('game', 'rocket')
             if game_type not in VALID_GAME_TYPES:
                 logger.warning(f"Неизвестный тип игры от Web App: user={telegram_id}, game={game_type}")
@@ -528,86 +563,184 @@ async def cmd_casino(message: Message):
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
-    """Админ панель"""
+    """Админ панель — главное меню"""
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ У вас нет прав администратора.")
         return
 
+    maint = get_maintenance()
+    maint_status = "🟢 Работает" if not maint else "🔴 Обслуживание"
+
     await message.answer(
-        "🔧 <b>Панель администратора</b>",
+        f"🔧 <b>Панель администратора</b>\n\n"
+        f"Статус: {maint_status}",
         reply_markup=get_admin_keyboard()
     )
 
 
-@dp.callback_query(F.data == "admin_users")
-async def cb_admin_users(callback_query: CallbackQuery):
-    """Показать всех пользователей"""
-    if callback_query.from_user.id not in ADMIN_IDS:
-        await callback_query.answer("❌ Нет прав", show_alert=True)
-        return
-
-    users = get_all_users()
-
-    if not users:
-        await callback_query.message.answer("👥 Пока нет пользователей.")
-        return
-
-    users_text = "👥 <b>Пользователи:</b>\n\n"
-    for user in users:
-        users_text += (
-            f"🆔 <code>{user['telegram_id']}</code> | "
-            f"{html.escape(user['first_name'] or '')} | "
-            f"${user['balance']:,.2f}\n"
-        )
-
-    await callback_query.message.answer(users_text)
-    await callback_query.answer()
-
+# --- Статистика ---
 
 @dp.callback_query(F.data == "admin_stats")
 async def cb_admin_stats(callback_query: CallbackQuery):
-    """Общая статистика"""
+    """Показать агрегированную статистику"""
     if callback_query.from_user.id not in ADMIN_IDS:
         await callback_query.answer("❌ Нет прав", show_alert=True)
         return
 
-    s = get_global_stats()
-    recent_games = get_recent_games(10)
+    s = get_admin_stats()
+
+    games_text = ""
+    for game_type, cnt in s["bets_by_game"].items():
+        games_text += f"  {game_type}: <b>{cnt:,}</b>\n"
+    if not games_text:
+        games_text = "  нет данных\n"
 
     stats_text = (
-        f"📈 <b>Общая статистика:</b>\n\n"
-        f"👥 Пользователей: <b>{s['total_users']}</b>\n"
-        f"🎮 Всего игр: <b>{s['total_games']}</b>\n\n"
-        f"🎮 <b>Последние игры:</b>\n"
+        f"📊 <b>Статистика BFG Casino</b>\n\n"
+        f"👥 Пользователей: <b>{s['total_users']:,}</b>\n"
+        f"🆕 Новых сегодня: <b>{s['new_users_today']}</b>\n\n"
+        f"🎮 Всего ставок: <b>{s['total_bets']:,}</b>\n"
+        f"🎮 Ставок сегодня: <b>{s['bets_today']:,}</b>\n\n"
+        f"💸 Всего поставлено: <b>{s['total_wagered']:,.0f}</b>\n"
+        f"💰 Всего выиграно: <b>{s['total_won']:,.0f}</b>\n"
+        f"{'🟢' if s['revenue'] >= 0 else '🔴'} Доход казино: <b>{s['revenue']:,.0f}</b>\n"
+        f"{'🟢' if s['revenue_today'] >= 0 else '🔴'} Доход сегодня: <b>{s['revenue_today']:,.0f}</b>\n\n"
+        f"🎯 <b>Ставки по играм:</b>\n{games_text}"
     )
 
-    for game in recent_games:
-        emoji = "✅" if game['result'] == 'win' else "❌"
-        stats_text += (
-            f"{emoji} {html.escape(game.get('first_name') or 'Unknown')} | "
-            f"{game['game_type']} | "
-            f"${game['stake']:.2f} → ${game['winnings']:.2f}\n"
-        )
-
-    await callback_query.message.answer(stats_text)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback_query.message.edit_text(stats_text, reply_markup=builder.as_markup())
     await callback_query.answer()
 
 
+# --- Пользователи ---
+
+@dp.callback_query(F.data == "admin_users")
+async def cb_admin_users(callback_query: CallbackQuery):
+    """Показать пользователей с пагинацией (первая страница)"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+    await _show_users_page(callback_query, offset=0)
+    await callback_query.answer()
+
+
+@dp.callback_query(F.data.startswith("admin_users_page_"))
+async def cb_admin_users_page(callback_query: CallbackQuery):
+    """Пагинация пользователей"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+    offset = int(callback_query.data.split("_")[-1])
+    await _show_users_page(callback_query, offset=offset)
+    await callback_query.answer()
+
+
+async def _show_users_page(callback_query: CallbackQuery, offset: int):
+    """Вспомогательная функция: показать страницу пользователей."""
+    page_size = 10
+    users = get_all_users(limit=page_size, offset=offset)
+
+    if not users and offset == 0:
+        await callback_query.message.edit_text("👥 Пока нет пользователей.")
+        return
+
+    users_text = f"👥 <b>Пользователи</b> (с {offset + 1}):\n\n"
+    for user in users:
+        banned = " 🚫" if user.get("is_banned") else ""
+        users_text += (
+            f"🆔 <code>{user['telegram_id']}</code> | "
+            f"{html.escape(user.get('first_name') or '')} | "
+            f"${user['balance']:,.0f}{banned}\n"
+        )
+
+    builder = InlineKeyboardBuilder()
+    if offset > 0:
+        builder.button(text="⬅️ Назад", callback_data=f"admin_users_page_{max(0, offset - page_size)}")
+    if len(users) == page_size:
+        builder.button(text="➡️ Далее", callback_data=f"admin_users_page_{offset + page_size}")
+    builder.button(text="🔙 Меню", callback_data="admin_back")
+    builder.adjust(2, 1)
+
+    await callback_query.message.edit_text(users_text, reply_markup=builder.as_markup())
+
+
+# --- Управление балансом (через FSM) ---
+
 @dp.callback_query(F.data == "admin_balance")
-async def cb_admin_balance(callback_query: CallbackQuery):
-    """Изменить баланс пользователя"""
+async def cb_admin_balance(callback_query: CallbackQuery, state: FSMContext):
+    """Запросить ID/username пользователя для изменения баланса"""
     if callback_query.from_user.id not in ADMIN_IDS:
         await callback_query.answer("❌ Нет прав", show_alert=True)
         return
 
-    await callback_query.message.answer(
-        "💵 <b>Изменение баланса</b>\n\n"
-        "Используйте команду:\n"
-        "<code>/setbalance &lt;user_id&gt; &lt;amount&gt;</code>\n\n"
-        "Пример: <code>/setbalance 123456789 50000</code>"
+    await state.set_state(AdminStates.waiting_for_user_id)
+    await callback_query.message.edit_text(
+        "💰 <b>Управление балансом</b>\n\n"
+        "Введите Telegram ID или @username пользователя:"
     )
     await callback_query.answer()
 
+
+@dp.message(AdminStates.waiting_for_user_id)
+async def handle_admin_user_id(message: Message, state: FSMContext):
+    """Обработать ввод ID/username для изменения баланса"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    text = message.text.strip() if message.text else ""
+    user = None
+
+    if text.startswith("@"):
+        user = get_user_by_username(text)
+    elif text.isdigit():
+        user = get_user(int(text))
+
+    if not user:
+        await message.answer("❌ Пользователь не найден. Попробуйте ещё раз:")
+        return
+
+    await state.update_data(target_user_id=user["telegram_id"])
+    await state.set_state(AdminStates.waiting_for_amount)
+    await message.answer(
+        f"Пользователь: <b>{html.escape(user.get('first_name') or 'Unknown')}</b>\n"
+        f"ID: <code>{user['telegram_id']}</code>\n"
+        f"Баланс: <b>{user['balance']:,.0f}</b>\n\n"
+        f"Введите новый баланс:"
+    )
+
+
+@dp.message(AdminStates.waiting_for_amount)
+async def handle_admin_amount(message: Message, state: FSMContext):
+    """Обработать ввод суммы для установки баланса"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    try:
+        amount = float(message.text.strip())
+    except (ValueError, TypeError, AttributeError):
+        await message.answer("❌ Введите число:")
+        return
+
+    if amount < 0:
+        await message.answer("❌ Баланс не может быть отрицательным:")
+        return
+
+    data = await state.get_data()
+    target_id = data["target_user_id"]
+    new_balance = set_balance(target_id, amount)
+    await state.clear()
+
+    await message.answer(
+        f"✅ Баланс пользователя <code>{target_id}</code> установлен на <b>{new_balance:,.0f}</b>",
+        reply_markup=get_admin_keyboard()
+    )
+
+
+# --- setbalance (для обратной совместимости) ---
 
 @dp.message(Command("setbalance"))
 async def cmd_setbalance(message: Message):
@@ -634,6 +767,306 @@ async def cmd_setbalance(message: Message):
 
     except (ValueError, IndexError):
         await message.answer("❌ Ошибка. Используйте: /setbalance <user_id> <amount>")
+
+
+# --- Рассылка ---
+
+@dp.callback_query(F.data == "admin_broadcast")
+async def cb_admin_broadcast(callback_query: CallbackQuery, state: FSMContext):
+    """Запросить текст рассылки"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.waiting_for_broadcast_text)
+    await callback_query.message.edit_text(
+        "📢 <b>Рассылка</b>\n\n"
+        "Введите текст сообщения для всех пользователей (HTML-разметка поддерживается):"
+    )
+    await callback_query.answer()
+
+
+@dp.message(AdminStates.waiting_for_broadcast_text)
+async def handle_broadcast_text(message: Message, state: FSMContext):
+    """Подтверждение и отправка рассылки"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    text = message.text or message.caption or ""
+    if not text.strip():
+        await message.answer("❌ Текст не может быть пустым:")
+        return
+
+    await state.clear()
+
+    users = get_all_users(limit=100000)
+    sent = 0
+    failed = 0
+
+    await message.answer(f"📢 Начинаю рассылку для {len(users)} пользователей...")
+
+    for user in users:
+        try:
+            await bot.send_message(user["telegram_id"], text, parse_mode="HTML")
+            sent += 1
+        except Exception:
+            failed += 1
+
+    await message.answer(
+        f"📢 <b>Рассылка завершена</b>\n\n"
+        f"✅ Отправлено: {sent}\n"
+        f"❌ Не доставлено: {failed}",
+        reply_markup=get_admin_keyboard()
+    )
+
+
+# --- Промо-коды ---
+
+@dp.callback_query(F.data == "admin_promos")
+async def cb_admin_promos(callback_query: CallbackQuery):
+    """Список промо-кодов"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    promos = get_promos()
+
+    text = "🎁 <b>Промо-коды</b>\n\n"
+    if promos:
+        for p in promos:
+            text += (
+                f"<code>{p['code']}</code> | "
+                f"+{p['bonus']:,} монет | "
+                f"{p['used_count']}/{p['max_uses']} исп.\n"
+            )
+    else:
+        text += "Промо-кодов пока нет.\n"
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Создать промо", callback_data="admin_create_promo")
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    builder.adjust(1)
+
+    await callback_query.message.edit_text(text, reply_markup=builder.as_markup())
+    await callback_query.answer()
+
+
+@dp.callback_query(F.data == "admin_create_promo")
+async def cb_admin_create_promo(callback_query: CallbackQuery, state: FSMContext):
+    """Начать создание промо-кода"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    await state.set_state(AdminStates.waiting_for_promo_code)
+    await callback_query.message.edit_text(
+        "🎁 <b>Создание промо-кода</b>\n\n"
+        "Введите код (латинские буквы и цифры):"
+    )
+    await callback_query.answer()
+
+
+@dp.message(AdminStates.waiting_for_promo_code)
+async def handle_promo_code_input(message: Message, state: FSMContext):
+    """Обработать ввод кода промо"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    code = (message.text or "").strip().upper()
+    if not code or not code.isalnum():
+        await message.answer("❌ Код должен содержать только латинские буквы и цифры:")
+        return
+
+    await state.update_data(promo_code=code)
+    await state.set_state(AdminStates.waiting_for_promo_bonus)
+    await message.answer(f"Код: <code>{code}</code>\n\nВведите бонус (количество монет):")
+
+
+@dp.message(AdminStates.waiting_for_promo_bonus)
+async def handle_promo_bonus_input(message: Message, state: FSMContext):
+    """Обработать ввод бонуса промо"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    try:
+        bonus = int(message.text.strip())
+    except (ValueError, TypeError, AttributeError):
+        await message.answer("❌ Введите целое число:")
+        return
+
+    if bonus <= 0:
+        await message.answer("❌ Бонус должен быть больше 0:")
+        return
+
+    await state.update_data(promo_bonus=bonus)
+    await state.set_state(AdminStates.waiting_for_promo_max_uses)
+    await message.answer(f"Бонус: <b>{bonus:,} монет</b>\n\nВведите максимальное количество использований:")
+
+
+@dp.message(AdminStates.waiting_for_promo_max_uses)
+async def handle_promo_max_uses_input(message: Message, state: FSMContext):
+    """Обработать ввод макс. использований и создать промо"""
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    try:
+        max_uses = int(message.text.strip())
+    except (ValueError, TypeError, AttributeError):
+        await message.answer("❌ Введите целое число:")
+        return
+
+    if max_uses <= 0:
+        await message.answer("❌ Количество должно быть больше 0:")
+        return
+
+    data = await state.get_data()
+    await state.clear()
+
+    code = data["promo_code"]
+    bonus = data["promo_bonus"]
+
+    if create_promo(code, bonus, max_uses):
+        await message.answer(
+            f"✅ Промо-код создан!\n\n"
+            f"Код: <code>{code}</code>\n"
+            f"Бонус: <b>{bonus:,} монет</b>\n"
+            f"Макс. использований: <b>{max_uses}</b>",
+            reply_markup=get_admin_keyboard()
+        )
+    else:
+        await message.answer(
+            f"❌ Промо-код <code>{code}</code> уже существует.",
+            reply_markup=get_admin_keyboard()
+        )
+
+
+# --- /promo для всех пользователей ---
+
+@dp.message(Command("promo"))
+async def cmd_promo(message: Message):
+    """Использовать промо-код"""
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("❌ Использование: /promo <код>\nПример: /promo BONUS100")
+        return
+
+    code = args[1].strip()
+    success, msg = use_promo(message.from_user.id, code)
+
+    if success:
+        await message.answer(f"🎁 <b>Промо-код активирован!</b>\n\n{msg}")
+    else:
+        await message.answer(f"❌ {msg}")
+
+
+# --- Режим обслуживания ---
+
+@dp.callback_query(F.data == "admin_maintenance")
+async def cb_admin_maintenance(callback_query: CallbackQuery):
+    """Переключить режим обслуживания"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    current = get_maintenance()
+    set_maintenance(not current)
+    new_state = not current
+
+    status = "🔴 ВКЛЮЧЕН" if new_state else "🟢 ВЫКЛЮЧЕН"
+    await callback_query.message.edit_text(
+        f"🔧 <b>Режим обслуживания</b>\n\n"
+        f"Статус: {status}\n\n"
+        f"{'Пользователи не смогут играть (кроме админов).' if new_state else 'Казино работает в обычном режиме.'}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_back")]
+        ])
+    )
+    await callback_query.answer()
+
+
+# --- Бан / Разбан ---
+
+@dp.callback_query(F.data.startswith("admin_ban_"))
+async def cb_admin_ban(callback_query: CallbackQuery):
+    """Забанить пользователя"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    user_id = int(callback_query.data.replace("admin_ban_", ""))
+    ban_user(user_id, True)
+    await callback_query.answer(f"🚫 Пользователь {user_id} забанен", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("admin_unban_"))
+async def cb_admin_unban(callback_query: CallbackQuery):
+    """Разбанить пользователя"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    user_id = int(callback_query.data.replace("admin_unban_", ""))
+    ban_user(user_id, False)
+    await callback_query.answer(f"✅ Пользователь {user_id} разбанен", show_alert=True)
+
+
+# --- Топ игроков ---
+
+@dp.callback_query(F.data == "admin_top")
+async def cb_admin_top(callback_query: CallbackQuery):
+    """Топ игроков из админ-панели"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    lb = get_leaderboard()
+
+    balance_lines = ""
+    for i, p in enumerate(lb["top_balance"], 1):
+        balance_lines += f"  {i}. {fmt_name(p)} — <b>${p['balance']:,.0f}</b>\n"
+    if not balance_lines:
+        balance_lines = "  нет данных\n"
+
+    games_lines = ""
+    for i, p in enumerate(lb["top_games"], 1):
+        games_lines += f"  {i}. {fmt_name(p)} — <b>{p['game_count']} игр</b>\n"
+    if not games_lines:
+        games_lines = "  нет данных\n"
+
+    text = (
+        f"🏆 <b>Топ игроков</b>\n\n"
+        f"💰 <b>По балансу:</b>\n{balance_lines}\n"
+        f"🎮 <b>По играм:</b>\n{games_lines}"
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔙 Назад", callback_data="admin_back")
+    await callback_query.message.edit_text(text, reply_markup=builder.as_markup())
+    await callback_query.answer()
+
+
+# --- Кнопка "Назад" в админ-панели ---
+
+@dp.callback_query(F.data == "admin_back")
+async def cb_admin_back(callback_query: CallbackQuery):
+    """Вернуться в главное меню админ-панели"""
+    if callback_query.from_user.id not in ADMIN_IDS:
+        await callback_query.answer("❌ Нет прав", show_alert=True)
+        return
+
+    maint = get_maintenance()
+    maint_status = "🟢 Работает" if not maint else "🔴 Обслуживание"
+
+    await callback_query.message.edit_text(
+        f"🔧 <b>Панель администратора</b>\n\n"
+        f"Статус: {maint_status}",
+        reply_markup=get_admin_keyboard()
+    )
+    await callback_query.answer()
 
 
 @dp.message(Command("stats"))

@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from config import DB_PATH
 
 
@@ -81,6 +81,43 @@ def init_db() -> None:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_donations_telegram_id
             ON donations(telegram_id, created_at DESC)
+        """)
+
+        # Добавить колонку is_banned в существующие таблицы (идемпотентно)
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # Колонка уже существует
+
+        # Таблица промо-кодов
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                code TEXT PRIMARY KEY,
+                bonus INTEGER NOT NULL,
+                max_uses INTEGER NOT NULL,
+                used_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Таблица использования промо-кодов (один код — один раз на пользователя)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS promo_uses (
+                promo_code TEXT NOT NULL,
+                telegram_id INTEGER NOT NULL,
+                used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (promo_code, telegram_id),
+                FOREIGN KEY (promo_code) REFERENCES promo_codes (code) ON DELETE CASCADE,
+                FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
+            )
+        """)
+
+        # Таблица настроек (ключ-значение)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
         """)
 
 
@@ -208,11 +245,14 @@ def set_balance(telegram_id: int, amount: float) -> float:
     return result[0] if result else 0.0
 
 
-def get_all_users() -> List[Dict[str, Any]]:
-    """Получить всех пользователей"""
+def get_all_users(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    """Получить всех пользователей с пагинацией"""
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users ORDER BY created_at DESC")
+        cursor.execute(
+            "SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset)
+        )
         users = cursor.fetchall()
         return [dict(user) for user in users]
 
@@ -535,3 +575,224 @@ def get_leaderboard() -> Dict[str, Any]:
         top_games = [dict(row) for row in cursor.fetchall()]
 
     return {"top_balance": top_balance, "top_games": top_games}
+
+
+# === Бан / разбан ===
+
+def ban_user(telegram_id: int, is_banned: bool) -> bool:
+    """Забанить или разбанить пользователя. Возвращает True если пользователь найден."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET is_banned = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?""",
+            (1 if is_banned else 0, telegram_id)
+        )
+        return cursor.rowcount > 0
+
+
+def is_user_banned(telegram_id: int) -> bool:
+    """Проверить, забанен ли пользователь."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_banned FROM users WHERE telegram_id = ?", (telegram_id,))
+        row = cursor.fetchone()
+        return bool(row["is_banned"]) if row else False
+
+
+# === Админ-статистика ===
+
+def get_admin_stats() -> Dict[str, Any]:
+    """Агрегированная статистика для админ-панели."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM games")
+        total_bets = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COALESCE(SUM(stake), 0) FROM games")
+        total_wagered = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COALESCE(SUM(winnings), 0) FROM games")
+        total_won = cursor.fetchone()[0]
+
+        revenue = total_wagered - total_won
+
+        # Статистика за сегодня
+        cursor.execute(
+            "SELECT COUNT(*) FROM users WHERE date(created_at) = date('now')"
+        )
+        new_users_today = cursor.fetchone()[0]
+
+        cursor.execute(
+            "SELECT COUNT(*) FROM games WHERE date(created_at) = date('now')"
+        )
+        bets_today = cursor.fetchone()[0]
+
+        cursor.execute(
+            "SELECT COALESCE(SUM(stake), 0) - COALESCE(SUM(winnings), 0) FROM games WHERE date(created_at) = date('now')"
+        )
+        revenue_today = cursor.fetchone()[0]
+
+        # Ставки по типам игр
+        cursor.execute("""
+            SELECT game_type, COUNT(*) as cnt
+            FROM games
+            GROUP BY game_type
+        """)
+        bets_by_game = {row["game_type"]: row["cnt"] for row in cursor.fetchall()}
+
+    return {
+        "total_users": total_users,
+        "total_bets": total_bets,
+        "total_wagered": total_wagered,
+        "total_won": total_won,
+        "revenue": revenue,
+        "new_users_today": new_users_today,
+        "bets_today": bets_today,
+        "revenue_today": revenue_today,
+        "bets_by_game": bets_by_game,
+    }
+
+
+# === Промо-коды ===
+
+def create_promo(code: str, bonus: int, max_uses: int) -> bool:
+    """Создать промо-код. Возвращает True если создан, False если уже существует."""
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO promo_codes (code, bonus, max_uses) VALUES (?, ?, ?)",
+                (code.upper(), bonus, max_uses)
+            )
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def use_promo(telegram_id: int, code: str) -> Tuple[bool, str]:
+    """
+    Использовать промо-код.
+    Возвращает (success, message).
+    """
+    code = code.upper()
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Проверяем существование промо-кода
+        cursor.execute("SELECT * FROM promo_codes WHERE code = ?", (code,))
+        promo = cursor.fetchone()
+        if not promo:
+            return False, "Промо-код не найден"
+
+        # Проверяем лимит использований
+        if promo["used_count"] >= promo["max_uses"]:
+            return False, "Промо-код исчерпан"
+
+        # Проверяем, использовал ли юзер раньше
+        cursor.execute(
+            "SELECT 1 FROM promo_uses WHERE promo_code = ? AND telegram_id = ?",
+            (code, telegram_id)
+        )
+        if cursor.fetchone():
+            return False, "Вы уже использовали этот промо-код"
+
+        # Активируем промо-код
+        cursor.execute(
+            "INSERT INTO promo_uses (promo_code, telegram_id) VALUES (?, ?)",
+            (code, telegram_id)
+        )
+        cursor.execute(
+            "UPDATE promo_codes SET used_count = used_count + 1 WHERE code = ?",
+            (code,)
+        )
+        cursor.execute(
+            """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?""",
+            (promo["bonus"], telegram_id)
+        )
+        conn.commit()
+        return True, f"Начислено {promo['bonus']:,} монет!"
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_promos() -> List[Dict[str, Any]]:
+    """Получить список всех промо-кодов."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM promo_codes ORDER BY created_at DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+
+# === Настройки (режим обслуживания) ===
+
+def set_maintenance(enabled: bool) -> None:
+    """Установить или снять режим обслуживания."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('maintenance', ?)",
+            ('1' if enabled else '0',)
+        )
+
+
+def get_maintenance() -> bool:
+    """Получить флаг режима обслуживания."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'maintenance'")
+        row = cursor.fetchone()
+        return row["value"] == '1' if row else False
+
+
+# === Поиск пользователя ===
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """Поиск пользователя по @username (без учёта регистра)."""
+    username = username.lstrip('@')
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?)",
+            (username,)
+        )
+        user = cursor.fetchone()
+        return dict(user) if user else None
+
+
+# === История ставок (для админ-панели) ===
+
+def get_bets_history(limit: int = 50, game_type: str = None) -> List[Dict[str, Any]]:
+    """История ставок с JOIN на пользователей. Можно фильтровать по типу игры."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if game_type:
+            cursor.execute(
+                """SELECT g.*, u.first_name, u.username
+                   FROM games g
+                   JOIN users u ON g.telegram_id = u.telegram_id
+                   WHERE g.game_type = ?
+                   ORDER BY g.created_at DESC
+                   LIMIT ?""",
+                (game_type, limit)
+            )
+        else:
+            cursor.execute(
+                """SELECT g.*, u.first_name, u.username
+                   FROM games g
+                   JOIN users u ON g.telegram_id = u.telegram_id
+                   ORDER BY g.created_at DESC
+                   LIMIT ?""",
+                (limit,)
+            )
+        return [dict(row) for row in cursor.fetchall()]
