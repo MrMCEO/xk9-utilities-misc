@@ -26,10 +26,17 @@ def init_db() -> None:
                 first_name TEXT,
                 last_name TEXT,
                 balance REAL DEFAULT 1000000,
+                donate_balance INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # Добавить колонку donate_balance в существующие таблицы (идемпотентно)
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN donate_balance INTEGER DEFAULT 0")
+        except Exception:
+            pass  # Колонка уже существует
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
@@ -215,6 +222,79 @@ def get_all_users() -> List[Dict[str, Any]]:
         return [dict(user) for user in users]
 
 
+# === Донатный баланс ===
+
+def get_donate_balance(telegram_id: int) -> int:
+    """Получить донатный баланс пользователя (монеты за Telegram Stars)"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT donate_balance FROM users WHERE telegram_id = ?", (telegram_id,))
+        result = cursor.fetchone()
+        return result["donate_balance"] if result else 0
+
+
+def add_donate_balance(telegram_id: int, amount: int) -> int:
+    """Пополнить донатный баланс (при оплате через Telegram Stars). Возвращает новый баланс."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?
+           RETURNING donate_balance""",
+        (amount, telegram_id)
+    )
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return result[0] if result else 0
+
+
+def update_donate_balance(telegram_id: int, delta: int) -> int:
+    """
+    Изменить донатный баланс (delta > 0 — пополнение, delta < 0 — списание).
+    Не проверяет достаточность средств. Возвращает новый баланс.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ?
+           RETURNING donate_balance""",
+        (delta, telegram_id)
+    )
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+    return result[0] if result else 0
+
+
+def update_donate_balance_checked(telegram_id: int, amount: int) -> tuple[bool, int]:
+    """
+    Атомарное списание с донатного баланса с проверкой достаточности средств.
+    amount — сумма для списания (положительное число).
+    Возвращает (success, new_balance).
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """UPDATE users SET donate_balance = donate_balance - ?, updated_at = CURRENT_TIMESTAMP
+           WHERE telegram_id = ? AND donate_balance >= ?
+           RETURNING donate_balance""",
+        (amount, telegram_id, amount)
+    )
+    result = cursor.fetchone()
+    conn.commit()
+
+    if result:
+        conn.close()
+        return True, result[0]
+
+    cursor.execute("SELECT donate_balance FROM users WHERE telegram_id = ?", (telegram_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return False, (row["donate_balance"] if row else 0)
+
+
 # === Игры ===
 
 def add_game(
@@ -350,16 +430,16 @@ def add_donation(
     )
 
     cursor.execute(
-        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
            WHERE telegram_id = ?
-           RETURNING balance""",
+           RETURNING donate_balance""",
         (coins_credited, telegram_id)
     )
-    new_balance = cursor.fetchone()
+    new_donate_balance = cursor.fetchone()
     conn.commit()
     conn.close()
 
-    return new_balance[0] if new_balance else 0.0
+    return new_donate_balance[0] if new_donate_balance else 0
 
 
 def get_user_donations(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]]:
