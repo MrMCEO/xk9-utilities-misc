@@ -52,39 +52,36 @@ def init_db() -> None:
             )
         """)
 
-    # Индекс для быстрого поиска по пользователю и дате
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_telegram_id
-        ON games(telegram_id, created_at DESC)
-    """)
+        # Индекс для быстрого поиска по пользователю и дате
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_telegram_id
+            ON games(telegram_id, created_at DESC)
+        """)
 
-    # Индекс для фильтрации по типу игры
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_games_type
-        ON games(game_type)
-    """)
+        # Индекс для фильтрации по типу игры
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_games_type
+            ON games(game_type)
+        """)
 
-    # Таблица донатов (пополнений через Telegram Payments)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS donations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER NOT NULL,
-            telegram_payment_charge_id TEXT NOT NULL UNIQUE,
-            provider_payment_charge_id TEXT,
-            amount_rub INTEGER NOT NULL,
-            coins_credited INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
-        )
-    """)
+        # Таблица донатов (пополнений через Telegram Payments)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS donations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                telegram_payment_charge_id TEXT NOT NULL UNIQUE,
+                provider_payment_charge_id TEXT,
+                amount_rub INTEGER NOT NULL,
+                coins_credited INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (telegram_id) REFERENCES users (telegram_id) ON DELETE CASCADE
+            )
+        """)
 
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_donations_telegram_id
-        ON donations(telegram_id, created_at DESC)
-    """)
-
-    conn.commit()
-    conn.close()
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_donations_telegram_id
+            ON donations(telegram_id, created_at DESC)
+        """)
 
 
 def close_db() -> None:
@@ -357,20 +354,7 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
             FROM games
             WHERE telegram_id = ?
         """, (telegram_id,))
-
-    cursor.execute("""
-        SELECT
-            COUNT(*) as total_games,
-            SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN result = 'lose' THEN 1 ELSE 0 END) as losses,
-            SUM(stake) as total_staked,
-            SUM(winnings) as total_winnings
-        FROM games
-        WHERE telegram_id = ?
-    """, (telegram_id,))
-
-    stats = cursor.fetchone()
-    conn.close()
+        stats = cursor.fetchone()
 
     if stats and stats["total_games"] > 0:
         stats = dict(stats)
@@ -387,7 +371,7 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
             "profit": 0
         }
 
-        return stats
+    return stats
 
 
 def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:

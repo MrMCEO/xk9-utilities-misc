@@ -15,6 +15,7 @@ from aiogram.types import (
     LabeledPrice,
     PreCheckoutQuery,
 )
+from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH, COINS_PER_STAR
