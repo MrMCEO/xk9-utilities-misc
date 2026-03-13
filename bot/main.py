@@ -249,19 +249,34 @@ async def handle_webapp_data(message: Message):
                 logger.warning(f"Подозрительный множитель от Web App: user={telegram_id}, multiplier={multiplier}")
                 return
 
+            # Определяем кошелёк (main или donate)
+            wallet = data.get('wallet', 'main')
+            use_donate = wallet == 'donate'
+
             # Проверяем достаточность баланса и списываем ставку атомарно
-            success, balance_after = update_balance_checked(telegram_id, -stake)
+            if use_donate:
+                stake_int = int(stake)
+                success, balance_after = update_donate_balance_checked(telegram_id, stake_int)
+            else:
+                success, balance_after = update_balance_checked(telegram_id, -stake)
+
             if not success:
-                logger.warning(f"Недостаточно средств у user={telegram_id}: stake={stake}, balance={balance_after}")
+                logger.warning(
+                    f"Недостаточно средств у user={telegram_id}: "
+                    f"wallet={wallet}, stake={stake}, balance={balance_after}"
+                )
                 return
 
             # Пересчитываем выигрыш на стороне бота
             winnings = round(stake * multiplier, 2) if won else 0.0
             profit = winnings - stake
 
-            # Начисляем выигрыш
+            # Начисляем выигрыш на тот же кошелёк
             if winnings > 0:
-                update_balance(telegram_id, winnings)
+                if use_donate:
+                    update_donate_balance(telegram_id, int(winnings))
+                else:
+                    update_balance(telegram_id, winnings)
 
             add_game(
                 telegram_id=telegram_id,
@@ -273,7 +288,7 @@ async def handle_webapp_data(message: Message):
             )
 
             logger.info(
-                f"Игра: {game_type}, User: {telegram_id}, "
+                f"Игра: {game_type}, User: {telegram_id}, Wallet: {wallet}, "
                 f"Ставка: {stake}, Множитель: {multiplier}, Выигрыш: {winnings}, Win: {won}"
             )
 
