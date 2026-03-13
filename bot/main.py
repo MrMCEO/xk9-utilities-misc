@@ -397,6 +397,10 @@ async def cmd_casino(message: Message):
             await message.answer("❌ Ставка должна быть больше 0")
             return
 
+        if stake > MAX_STAKE:
+            await message.answer(f"❌ Максимальная ставка: {MAX_STAKE:,}")
+            return
+
         # Множители с весами (вероятностями)
         # Вероятность x0 = 25% (house edge)
         multipliers = [
@@ -732,6 +736,10 @@ async def cb_donate_amount(callback_query: CallbackQuery):
         await callback_query.answer("Ошибка", show_alert=True)
         return
 
+    if amount_stars <= 0 or amount_stars > 2500:
+        await callback_query.answer("Неверная сумма", show_alert=True)
+        return
+
     coins = amount_stars * COINS_PER_STAR
 
     await callback_query.message.answer_invoice(
@@ -800,6 +808,10 @@ async def handle_successful_payment(message: Message):
     except (IndexError, ValueError):
         logger.error(f"Неверный payload платежа: {payment.invoice_payload}")
         await message.answer("❌ Ошибка обработки платежа. Обратитесь к администратору.")
+        return
+
+    if amount_stars <= 0:
+        logger.error(f"Нулевое или отрицательное кол-во звёзд в payload: {payment.invoice_payload}")
         return
 
     # Конвертируем звёзды в игровые монеты (коэффициент из конфига)
