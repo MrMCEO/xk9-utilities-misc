@@ -60,13 +60,15 @@
    RESET
 ═══════════════════════════════════════════════════ */
 *,*::before,*::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html,body { height:100%; overflow:hidden; }
+html { height:100%; }
+body { height:100%; overflow:hidden; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
-    height: 100vh;
+    /* 100dvh учитывает виртуальную клавиатуру — viewport сжимается когда клавиатура открыта */
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     transition: var(--tr);
@@ -1355,7 +1357,7 @@ function applyRipples() {
 const BOT_USERNAME = 'BFGCasinoBot';
 const tg     = window.Telegram?.WebApp || {};
 const tgUser = tg.initDataUnsafe?.user || {};
-if (tg.ready) { tg.ready(); tg.expand(); }
+if (tg.ready) { tg.ready(); tg.expand(); tg.disableVerticalSwipes?.(); }
 function haptic(t)  { try { tg.HapticFeedback?.impactOccurred(t||'light'); }       catch(e){} }
 function hNotify(t) { try { tg.HapticFeedback?.notificationOccurred(t||'success'); } catch(e){} }
 
