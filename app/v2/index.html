@@ -2138,17 +2138,16 @@ const depositManual  = document.getElementById('depositManualBtn');
 
 function openDeposit() {
     haptic('light');
-    const isTelegram = window.Telegram && window.Telegram.WebApp && tg.initData;
+    const isTelegram = window.Telegram && window.Telegram.WebApp && tg.version;
     if (!isTelegram) {
-        /* Opened in browser, not Telegram */
         alert('Откройте приложение в Telegram для пополнения баланса');
         return;
     }
-    const botUsername = tg.initDataUnsafe?.bot?.username;
-    if (botUsername && tg.openTelegramLink) {
+    const botUsername = tg.initDataUnsafe?.bot?.username || tg.initDataUnsafe?.receiver?.username;
+    if (botUsername) {
         tg.openTelegramLink('https://t.me/' + botUsername + '?start=donate');
-    } else if (tg.close) {
-        /* Fallback — just close the WebApp so user returns to the bot */
+    } else {
+        /* Fallback: закрываем WebApp — пользователь возвращается к боту и вводит /donate */
         tg.close();
     }
 }
