@@ -1257,7 +1257,9 @@ function fmtDonate(v) { return '⭐ ' + Math.round(v).toLocaleString('ru-RU'); }
 
 function changeBalance(delta) {
     if (activeWallet === 'donate') {
-        donateBalance += delta;
+        /* Защита от отрицательного донатного баланса при списании */
+        if (delta < 0 && donateBalance + delta < 0) donateBalance = 0;
+        else donateBalance += delta;
         try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
         balDonEl.textContent = fmtDonate(donateBalance);
     } else {
@@ -2343,7 +2345,10 @@ function initiatePayment(amount) {
 
 function handleInvoiceClosed(amount, result) {
     if (result && result.status === 'paid') {
-        changeBalance(amount);
+        /* Пополнение всегда идёт на донатный баланс, независимо от activeWallet */
+        donateBalance += amount;
+        try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+        balDonEl.textContent = fmtDonate(donateBalance);
         confStart();
         depositContent.style.display = 'none';
         document.getElementById('depositSuccessSub').textContent =
