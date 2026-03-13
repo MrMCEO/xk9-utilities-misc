@@ -2143,13 +2143,8 @@ function openDeposit() {
         alert('Откройте приложение в Telegram для пополнения баланса');
         return;
     }
-    const botUsername = tg.initDataUnsafe?.bot?.username || tg.initDataUnsafe?.receiver?.username;
-    if (botUsername) {
-        tg.openTelegramLink('https://t.me/' + botUsername + '?start=donate');
-    } else {
-        /* Fallback: закрываем WebApp — пользователь возвращается к боту и вводит /donate */
-        tg.close();
-    }
+    const botUsername = tg.initDataUnsafe?.bot?.username || 'MyUnrealtestbot';
+    tg.openTelegramLink('https://t.me/' + botUsername + '?start=donate');
 }
 
 function closeDeposit() {
