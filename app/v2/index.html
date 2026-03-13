@@ -1638,6 +1638,7 @@ function confStop() {
    MODAL
 ════════════════════════════════════ */
 function openModal(emoji, title, sub, amount, isWin) {
+    if (autoCloseTimer) { clearTimeout(autoCloseTimer); autoCloseTimer = null; }
     document.getElementById('mEmoji').textContent = emoji;
     document.getElementById('mTitle').textContent = title;
     document.getElementById('mSub').textContent   = sub;
