@@ -1,6 +1,5 @@
 import sqlite3
 from typing import Optional, List, Dict, Any
-from contextlib import contextmanager
 from config import DB_PATH
 
 
@@ -35,7 +34,7 @@ def init_db() -> None:
         # Добавить колонку donate_balance в существующие таблицы (идемпотентно)
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN donate_balance INTEGER DEFAULT 0")
-        except Exception:
+        except sqlite3.OperationalError:
             pass  # Колонка уже существует
 
         cursor.execute("""
@@ -100,29 +99,27 @@ def get_or_create_user(
     """Получить или создать пользователя (INSERT OR IGNORE + UPDATE, 2 запроса вместо 3)"""
     from config import DEFAULT_BALANCE
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
 
-    # Пытаемся создать — если уже есть, игнорируем
-    cursor.execute(
-        """INSERT OR IGNORE INTO users (telegram_id, username, first_name, last_name, balance)
-           VALUES (?, ?, ?, ?, ?)""",
-        (telegram_id, username, first_name, last_name, DEFAULT_BALANCE)
-    )
+        # Пытаемся создать — если уже есть, игнорируем
+        cursor.execute(
+            """INSERT OR IGNORE INTO users (telegram_id, username, first_name, last_name, balance)
+               VALUES (?, ?, ?, ?, ?)""",
+            (telegram_id, username, first_name, last_name, DEFAULT_BALANCE)
+        )
 
-    # Обновляем данные профиля (всегда актуальные)
-    cursor.execute(
-        """UPDATE users
-           SET username = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?""",
-        (username, first_name, last_name, telegram_id)
-    )
-    conn.commit()
+        # Обновляем данные профиля (всегда актуальные)
+        cursor.execute(
+            """UPDATE users
+               SET username = ?, first_name = ?, last_name = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?""",
+            (username, first_name, last_name, telegram_id)
+        )
 
-    cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-    user = cursor.fetchone()
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
 
-    conn.close()
     return dict(user) if user else None
 
 
@@ -149,18 +146,15 @@ def update_balance(telegram_id: int, amount: float) -> float:
     Обновить баланс пользователя (один запрос через RETURNING).
     amount > 0 — пополнение, amount < 0 — списание.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?
-           RETURNING balance""",
-        (amount, telegram_id)
-    )
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?
+               RETURNING balance""",
+            (amount, telegram_id)
+        )
+        result = cursor.fetchone()
     return result[0] if result else 0.0
 
 
@@ -179,43 +173,35 @@ def update_balance_checked(telegram_id: int, amount: float) -> tuple[bool, float
     Это двухфазный коммит: UPDATE с WHERE условием гарантирует, что списание произойдёт только если
     баланс достаточен. Используется для защиты от овердрафта в cmd_casino и handle_webapp_data.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ? AND balance + ? >= 0
+               RETURNING balance""",
+            (amount, telegram_id, amount)
+        )
+        result = cursor.fetchone()
+        if result:
+            return True, result[0]
 
-    cursor.execute(
-        """UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ? AND balance + ? >= 0
-           RETURNING balance""",
-        (amount, telegram_id, amount)
-    )
-    result = cursor.fetchone()
-    conn.commit()
-
-    if result:
-        conn.close()
-        return True, result[0]
-
-    # Средств не хватило — возвращаем текущий баланс
-    cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
-    row = cursor.fetchone()
-    conn.close()
+        # Средств не хватило — возвращаем текущий баланс
+        cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
+        row = cursor.fetchone()
     return False, (row["balance"] if row else 0.0)
 
 
 def set_balance(telegram_id: int, amount: float) -> float:
     """Установить баланс пользователя (один запрос через RETURNING)"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?
-           RETURNING balance""",
-        (amount, telegram_id)
-    )
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?
+               RETURNING balance""",
+            (amount, telegram_id)
+        )
+        result = cursor.fetchone()
     return result[0] if result else 0.0
 
 
@@ -241,17 +227,15 @@ def get_donate_balance(telegram_id: int) -> int:
 
 def add_donate_balance(telegram_id: int, amount: int) -> int:
     """Пополнить донатный баланс (при оплате через Telegram Stars). Возвращает новый баланс."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?
-           RETURNING donate_balance""",
-        (amount, telegram_id)
-    )
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?
+               RETURNING donate_balance""",
+            (amount, telegram_id)
+        )
+        result = cursor.fetchone()
     return result[0] if result else 0
 
 
@@ -260,17 +244,15 @@ def update_donate_balance(telegram_id: int, delta: int) -> int:
     Изменить донатный баланс (delta > 0 — пополнение, delta < 0 — списание).
     Не проверяет достаточность средств. Возвращает новый баланс.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?
-           RETURNING donate_balance""",
-        (delta, telegram_id)
-    )
-    result = cursor.fetchone()
-    conn.commit()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?
+               RETURNING donate_balance""",
+            (delta, telegram_id)
+        )
+        result = cursor.fetchone()
     return result[0] if result else 0
 
 
@@ -288,24 +270,20 @@ def update_donate_balance_checked(telegram_id: int, amount: int) -> tuple[bool, 
 
     Используется в handle_webapp_data при wallet='donate'.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """UPDATE users SET donate_balance = donate_balance - ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ? AND donate_balance >= ?
-           RETURNING donate_balance""",
-        (amount, telegram_id, amount)
-    )
-    result = cursor.fetchone()
-    conn.commit()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """UPDATE users SET donate_balance = donate_balance - ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ? AND donate_balance >= ?
+               RETURNING donate_balance""",
+            (amount, telegram_id, amount)
+        )
+        result = cursor.fetchone()
+        if result:
+            return True, result[0]
 
-    if result:
-        conn.close()
-        return True, result[0]
-
-    cursor.execute("SELECT donate_balance FROM users WHERE telegram_id = ?", (telegram_id,))
-    row = cursor.fetchone()
-    conn.close()
+        cursor.execute("SELECT donate_balance FROM users WHERE telegram_id = ?", (telegram_id,))
+        row = cursor.fetchone()
     return False, (row["donate_balance"] if row else 0)
 
 
@@ -323,37 +301,29 @@ def add_game(
     Добавить запись об игре.
     result: 'win' или 'lose'
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """INSERT INTO games (telegram_id, game_type, stake, result, winnings, multiplier)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (telegram_id, game_type, stake, result, winnings, multiplier)
-    )
-
-    game_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO games (telegram_id, game_type, stake, result, winnings, multiplier)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (telegram_id, game_type, stake, result, winnings, multiplier)
+        )
+        game_id = cursor.lastrowid
     return game_id
 
 
 def get_user_games(telegram_id: int, limit: int = 15) -> List[Dict[str, Any]]:
     """Получить последние игры пользователя (для статистики)"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """SELECT * FROM games
-           WHERE telegram_id = ?
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        (telegram_id, limit)
-    )
-    games = cursor.fetchall()
-
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT * FROM games
+               WHERE telegram_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (telegram_id, limit)
+        )
+        games = cursor.fetchall()
     return [dict(game) for game in games]
 
 
@@ -396,20 +366,17 @@ def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:
     Получить последние игры всех пользователей с информацией о игроке.
     Используется для администраторской статистики.
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """SELECT g.*, u.first_name, u.username
-           FROM games g
-           JOIN users u ON g.telegram_id = u.telegram_id
-           ORDER BY g.created_at DESC
-           LIMIT ?""",
-        (limit,)
-    )
-    games = cursor.fetchall()
-
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT g.*, u.first_name, u.username
+               FROM games g
+               JOIN users u ON g.telegram_id = u.telegram_id
+               ORDER BY g.created_at DESC
+               LIMIT ?""",
+            (limit,)
+        )
+        games = cursor.fetchall()
     return [dict(game) for game in games]
 
 
@@ -473,18 +440,16 @@ def add_donation(
 
 def get_user_donations(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     """Получить историю пополнений пользователя"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """SELECT * FROM donations
-           WHERE telegram_id = ?
-           ORDER BY created_at DESC
-           LIMIT ?""",
-        (telegram_id, limit)
-    )
-    rows = cursor.fetchall()
-    conn.close()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT * FROM donations
+               WHERE telegram_id = ?
+               ORDER BY created_at DESC
+               LIMIT ?""",
+            (telegram_id, limit)
+        )
+        rows = cursor.fetchall()
     return [dict(row) for row in rows]
 
 
@@ -492,17 +457,12 @@ def get_user_donations(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]
 
 def cleanup_old_games(days: int = 30) -> int:
     """Удалить игры старше указанного количества дней"""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """DELETE FROM games
-           WHERE created_at < datetime('now', ? || ' days')""",
-        (f'-{days}',)
-    )
-
-    deleted = cursor.rowcount
-    conn.commit()
-    conn.close()
-
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """DELETE FROM games
+               WHERE created_at < datetime('now', ? || ' days')""",
+            (f'-{days}',)
+        )
+        deleted = cursor.rowcount
     return deleted
