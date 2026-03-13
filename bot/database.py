@@ -402,28 +402,33 @@ def add_donation(
     amount_rub: int,
     coins_credited: int,
 ) -> int:
-    """Записать успешное пополнение и зачислить монеты на баланс (в одной транзакции)"""
+    """Записать успешное пополнение и зачислить монеты на donate_balance (одна транзакция).
+    При ошибке — откатывает обе операции, чтобы монеты не потерялись."""
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """INSERT INTO donations
-               (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
-           VALUES (?, ?, ?, ?, ?)""",
-        (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
-    )
+    try:
+        cursor.execute(
+            """INSERT INTO donations
+                   (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
+               VALUES (?, ?, ?, ?, ?)""",
+            (telegram_id, telegram_payment_charge_id, provider_payment_charge_id, amount_rub, coins_credited)
+        )
 
-    cursor.execute(
-        """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
-           WHERE telegram_id = ?
-           RETURNING donate_balance""",
-        (coins_credited, telegram_id)
-    )
-    new_donate_balance = cursor.fetchone()
-    conn.commit()
-    conn.close()
-
-    return new_donate_balance[0] if new_donate_balance else 0
+        cursor.execute(
+            """UPDATE users SET donate_balance = donate_balance + ?, updated_at = CURRENT_TIMESTAMP
+               WHERE telegram_id = ?
+               RETURNING donate_balance""",
+            (coins_credited, telegram_id)
+        )
+        new_donate_balance = cursor.fetchone()
+        conn.commit()
+        return new_donate_balance[0] if new_donate_balance else 0
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_user_donations(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]]:
