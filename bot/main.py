@@ -74,7 +74,22 @@ def fmt_name(user: dict) -> str:
 
 
 async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) -> None:
-    """Отправить инвойс Telegram Stars для пополнения баланса."""
+    """
+    Отправить инвойс Telegram Stars для пополнения баланса.
+
+    Параметры:
+    - target (Message): объект сообщения, куда отправить инвойс
+    - user_id (int): Telegram ID пользователя (для вставки в payload)
+    - amount_stars (int): количество звёзд для покупки (будет конвертировано в монеты)
+
+    Логика:
+    1. Конвертируем звёзды в монеты: coins = amount_stars * COINS_PER_STAR
+    2. Создаём инвойс с payload="donate_<stars>_<user_id>" (для валидации при платеже)
+    3. Telegram Bot API обрабатывает инвойс и показывает форму оплаты пользователю
+    4. При успехе отправляется successful_payment обработчику handle_successful_payment
+
+    Используется в cb_donate_amount и handle_custom_amount.
+    """
     coins = amount_stars * COINS_PER_STAR
     await target.answer_invoice(
         title="Пополнение BFG Casino",
