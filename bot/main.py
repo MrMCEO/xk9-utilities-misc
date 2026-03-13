@@ -225,6 +225,8 @@ async def cmd_history(message: Message):
 # === Обработка данных от Web App ===
 
 MAX_MULTIPLIER = 1000.0  # Максимально допустимый множитель от Web App
+MAX_STAKE = 10_000_000  # Максимально допустимая ставка
+VALID_GAME_TYPES = {'rocket', 'minesweeper'}  # Допустимые типы игр
 
 
 @dp.message(F.web_app_data)
@@ -263,6 +265,9 @@ async def handle_webapp_data(message: Message):
         if data.get('type') == 'game_result':
             telegram_id = message.from_user.id
             game_type = data.get('game', 'rocket')
+            if game_type not in VALID_GAME_TYPES:
+                logger.warning(f"Неизвестный тип игры от Web App: user={telegram_id}, game={game_type}")
+                game_type = 'rocket'
             won = bool(data.get('won', False))
 
             # Принимаем от клиента только stake и multiplier — остальное считаем сами
@@ -274,13 +279,13 @@ async def handle_webapp_data(message: Message):
                 logger.warning(f"Некорректные числовые данные от Web App: user={telegram_id}, data={data}")
                 return
 
-            # Валидация ставки (должна быть положительной)
-            if stake <= 0:
-                logger.warning(f"Нулевая или отрицательная ставка от Web App: user={telegram_id}, stake={stake}")
+            # Валидация ставки (должна быть положительной и не превышать MAX_STAKE)
+            if stake <= 0 or stake > MAX_STAKE:
+                logger.warning(f"Недопустимая ставка от Web App: user={telegram_id}, stake={stake}")
                 return
 
-            # Валидация множителя (защита от экстремальных значений)
-            if multiplier < 0 or multiplier > MAX_MULTIPLIER:
+            # Валидация множителя (должен быть > 0, защита от нулевого выигрыша при won=True и экстремальных значений)
+            if multiplier <= 0 or multiplier > MAX_MULTIPLIER:
                 logger.warning(f"Подозрительный множитель от Web App: user={telegram_id}, multiplier={multiplier}")
                 return
 
