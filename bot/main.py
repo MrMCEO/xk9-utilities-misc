@@ -118,13 +118,16 @@ async def cmd_start(message: Message, command: CommandObject):
     # Устанавливаем персональную кнопку меню (нижняя кнопка Telegram) с уникальным URL,
     # содержащим текущий баланс пользователя (query-параметры b и db)
     # Это даёт каждому пользователю персональный URL с его балансом, отправляемый Web App при загрузке
-    await bot.set_chat_menu_button(
-        chat_id=message.from_user.id,
-        menu_button=MenuButtonWebApp(
-            text="🎮 Играть",
-            web_app=WebAppInfo(url=f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}")
+    try:
+        await bot.set_chat_menu_button(
+            chat_id=message.from_user.id,
+            menu_button=MenuButtonWebApp(
+                text="🎮 Играть",
+                web_app=WebAppInfo(url=f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}")
+            )
         )
-    )
+    except Exception:
+        pass
     await message.answer(
         f"🎰 <b>Добро пожаловать в BFG Casino!</b>\n\n"
         f"👤 {message.from_user.first_name}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
@@ -237,7 +240,7 @@ async def cmd_history(message: Message):
 
 MAX_MULTIPLIER = 1000.0  # Максимально допустимый множитель от Web App (защита от экстремальных значений через DevTools)
 MAX_STAKE = 10_000_000  # Максимально допустимая ставка (защита от переполнения баланса при списании)
-VALID_GAME_TYPES = {'rocket', 'minesweeper'}  # Допустимые типы игр из Web App (валидация в handle_webapp_data)
+VALID_GAME_TYPES = {'rocket', 'minesweeper', 'ladder'}  # Допустимые типы игр из Web App (валидация в handle_webapp_data)
 
 
 @dp.message(F.web_app_data)
