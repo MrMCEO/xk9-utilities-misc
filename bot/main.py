@@ -2,6 +2,8 @@ import logging
 import json
 import random
 import html
+import asyncio
+import base64
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -123,10 +125,44 @@ async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) 
 
 # === Клавиатуры ===
 
-def get_main_keyboard(balance: float = 0, donate_balance: int = 0) -> ReplyKeyboardMarkup:
+def _build_admin_data() -> str:
+    """Собрать данные для админ-панели фронтенда и закодировать в base64."""
+    stats = get_admin_stats()
+    promos = get_promos()
+    recent = get_bets_history(limit=20)
+    maint = get_maintenance()
+
+    admin_data = {
+        "users": stats["total_users"],
+        "bets_today": stats["bets_today"],
+        "revenue_today": stats["revenue_today"],
+        "active_promos": sum(1 for p in promos if p["used_count"] < p["max_uses"]),
+        "activity_24h": stats["bets_today"],
+        "promo_codes": [
+            {"code": p["code"], "bonus": p["bonus"], "max_uses": p["max_uses"], "used_count": p["used_count"]}
+            for p in promos
+        ],
+        "recent_bets": [
+            {
+                "user": r.get("first_name") or r.get("username") or "Unknown",
+                "game": r["game_type"],
+                "stake": r["stake"],
+                "winnings": r["winnings"],
+                "result": r["result"],
+            }
+            for r in recent[:10]
+        ],
+        "maintenance": maint,
+    }
+    return base64.urlsafe_b64encode(json.dumps(admin_data, ensure_ascii=False).encode()).decode()
+
+
+def get_main_keyboard(balance: float = 0, donate_balance: int = 0, is_admin: bool = False) -> ReplyKeyboardMarkup:
     """Основная клавиатура с кнопкой Web App"""
     builder = ReplyKeyboardBuilder()
     url = f"{WEB_APP_URL}?b={balance}&db={donate_balance}"
+    if is_admin:
+        url += f"&admin=1&admindata={_build_admin_data()}"
     builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=url))
     builder.button(text="🎰 Казино")
     builder.button(text="📊 Моя статистика")
@@ -183,15 +219,19 @@ async def cmd_start(message: Message, command: CommandObject):
         return
 
     donate_bal = get_donate_balance(message.from_user.id)
+    is_admin = message.from_user.id in ADMIN_IDS
+
     # Устанавливаем персональную кнопку меню (нижняя кнопка Telegram) с уникальным URL,
     # содержащим текущий баланс пользователя (query-параметры b и db)
-    # Это даёт каждому пользователю персональный URL с его балансом, отправляемый Web App при загрузке
+    menu_url = f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}"
+    if is_admin:
+        menu_url += f"&admin=1&admindata={_build_admin_data()}"
     try:
         await bot.set_chat_menu_button(
             chat_id=message.from_user.id,
             menu_button=MenuButtonWebApp(
                 text="🎮 Играть",
-                web_app=WebAppInfo(url=f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}")
+                web_app=WebAppInfo(url=menu_url)
             )
         )
     except Exception:
@@ -201,7 +241,7 @@ async def cmd_start(message: Message, command: CommandObject):
         f"👤 {html.escape(message.from_user.first_name or '')}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
         f"🚀 Запускайте игру и испытайте удачу!\n"
         f"Нажмите кнопку ниже 👇",
-        reply_markup=get_main_keyboard(user['balance'], donate_bal),
+        reply_markup=get_main_keyboard(user['balance'], donate_bal, is_admin=is_admin),
     )
 
 
@@ -236,12 +276,13 @@ async def cmd_help(message: Message):
         "/play - Открыть игровое приложение\n"
         "/casino - Игра в казино (<ставка>)\n"
         "/balance - Проверить баланс\n"
-        "/stats - Моя статистика\n"
         "/history - История игр\n"
         "/donate - Пополнить баланс\n"
+        "/promo - Активировать промо-код\n"
         "/help - Эта справка\n\n"
         "🔧 <b>Админ:</b>\n"
         "/admin - Панель администратора\n"
+        "/stats - Статистика казино\n"
         "/setbalance - Изменить баланс"
     )
     await message.answer(help_text)
@@ -358,6 +399,44 @@ async def handle_webapp_data(message: Message):
 
         data = json.loads(message.web_app_data.data)
 
+        # Обработка админ-действий из Web App (с проверкой прав)
+        action = data.get('action', '')
+        if action.startswith('admin_'):
+            if telegram_id not in ADMIN_IDS:
+                logger.warning(f"Попытка админ-действия от не-админа: user={telegram_id}, action={action}")
+                return
+
+            if action == 'admin_maintenance_toggle':
+                current = get_maintenance()
+                set_maintenance(not current)
+                state = "включён" if not current else "выключен"
+                await message.answer(f"🔧 Режим обслуживания {state}.")
+                logger.info(f"Admin {telegram_id}: maintenance {'on' if not current else 'off'}")
+                return
+
+            if action == 'admin_balance':
+                target_id = data.get('user_id')
+                amount = data.get('amount')
+                if target_id and amount is not None:
+                    try:
+                        target_id = int(target_id)
+                        amount = float(amount)
+                        if amount < 0:
+                            await message.answer("❌ Баланс не может быть отрицательным.")
+                            return
+                        new_bal = set_balance(target_id, amount)
+                        await message.answer(f"✅ Баланс пользователя {target_id} установлен: ${new_bal:,.2f}")
+                        logger.info(f"Admin {telegram_id}: set balance user={target_id} amount={amount}")
+                    except (ValueError, TypeError):
+                        await message.answer("❌ Некорректные данные.")
+                return
+
+            if action == 'admin_refresh':
+                await message.answer("🔄 Данные обновлены. Перезайдите в приложение для актуальной статистики.")
+                return
+
+            return
+
         if data.get('type') == 'game_result':
             game_type = data.get('game', 'rocket')
             if game_type not in VALID_GAME_TYPES:
@@ -452,6 +531,16 @@ async def cmd_casino(message: Message):
     5. Зачисляем выигрыш (если есть)
     6. Логируем результат для статистики
     """
+    # Проверка бана
+    if is_user_banned(message.from_user.id):
+        await message.answer("🚫 Ваш аккаунт заблокирован. Обратитесь к администратору.")
+        return
+
+    # Проверка режима обслуживания
+    if get_maintenance() and message.from_user.id not in ADMIN_IDS:
+        await message.answer("🔧 Казино на техническом обслуживании. Попробуйте позже.")
+        return
+
     try:
         args = message.text.split()
 
@@ -812,6 +901,7 @@ async def handle_broadcast_text(message: Message, state: FSMContext):
             sent += 1
         except Exception:
             failed += 1
+        await asyncio.sleep(0.05)  # throttling: ~20 msg/sec, защита от rate limit Telegram
 
     await message.answer(
         f"📢 <b>Рассылка завершена</b>\n\n"
@@ -949,6 +1039,10 @@ async def handle_promo_max_uses_input(message: Message, state: FSMContext):
 @dp.message(Command("promo"))
 async def cmd_promo(message: Message):
     """Использовать промо-код"""
+    if is_user_banned(message.from_user.id):
+        await message.answer("🚫 Ваш аккаунт заблокирован.")
+        return
+
     args = message.text.split()
     if len(args) < 2:
         await message.answer("❌ Использование: /promo <код>\nПример: /promo BONUS100")
@@ -997,7 +1091,11 @@ async def cb_admin_ban(callback_query: CallbackQuery):
         await callback_query.answer("❌ Нет прав", show_alert=True)
         return
 
-    user_id = int(callback_query.data.replace("admin_ban_", ""))
+    try:
+        user_id = int(callback_query.data.replace("admin_ban_", ""))
+    except ValueError:
+        await callback_query.answer("❌ Некорректный ID", show_alert=True)
+        return
     ban_user(user_id, True)
     await callback_query.answer(f"🚫 Пользователь {user_id} забанен", show_alert=True)
 
@@ -1009,7 +1107,11 @@ async def cb_admin_unban(callback_query: CallbackQuery):
         await callback_query.answer("❌ Нет прав", show_alert=True)
         return
 
-    user_id = int(callback_query.data.replace("admin_unban_", ""))
+    try:
+        user_id = int(callback_query.data.replace("admin_unban_", ""))
+    except ValueError:
+        await callback_query.answer("❌ Некорректный ID", show_alert=True)
+        return
     ban_user(user_id, False)
     await callback_query.answer(f"✅ Пользователь {user_id} разбанен", show_alert=True)
 
