@@ -3066,7 +3066,7 @@ applyRipples();
     const promos = adminData.promo_codes || [];
     if (promos.length > 0) {
         document.getElementById('adPromoBody').innerHTML = promos.map(p =>
-            `<tr><td>${esc(p.code)}</td><td>${esc(p.bonus)}</td><td>${esc(p.uses_left)}</td></tr>`
+            `<tr><td>${esc(p.code)}</td><td>${esc(p.bonus)}</td><td>${esc(p.max_uses - p.used_count)}</td></tr>`
         ).join('');
     }
 
