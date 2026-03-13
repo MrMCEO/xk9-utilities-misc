@@ -1866,6 +1866,9 @@ function rLoop() {
 
 function rGenCrash() {
     if (Math.random() < 0.04) return 1.0;
+    /* Лимит 100x — намеренное ограничение на стороне клиента для UX
+       (траектория при >100x выходит за пределы canvas).
+       Бэкенд принимает до MAX_MULTIPLIER=1000x и пересчитывает выигрыш сам. */
     return Math.max(1.0, Math.min(0.99 / (1 - Math.random()), 100));
 }
 
@@ -2454,6 +2457,13 @@ const depositInput   = document.getElementById('depositAmtInput');
 const depositManual  = document.getElementById('depositManualBtn');
 
 function openDeposit() {
+    /* Guard: пополнение доступно только внутри Telegram.
+       В браузере tg.initDataUnsafe.user отсутствует — показываем заглушку
+       вместо настоящего модала, чтобы исключить бесплатное зачисление через fallback. */
+    if (!tg.initDataUnsafe?.user) {
+        openModal('ℹ️', 'Только в Telegram', 'Откройте приложение через бота @BFGCasinoBot', '', null);
+        return;
+    }
     haptic('light');
     depositContent.style.display = 'block';
     depositSuccess.classList.remove('show');
