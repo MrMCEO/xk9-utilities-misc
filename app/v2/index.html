@@ -1332,7 +1332,6 @@ const balDonEl  = document.getElementById('balDonate');
 
 function fmtFull(v)  { return '$' + Math.abs(v).toLocaleString('ru-RU', {maximumFractionDigits:2}); }
 function fmtShort(v) {
-    if (v >= 1_000_000) return '$' + (v/1_000_000).toFixed(2) + 'M';
     return '$' + Math.round(v).toLocaleString('ru-RU');
 }
 function fmtDonate(v) { return '⭐ ' + Math.round(v).toLocaleString('ru-RU'); }
