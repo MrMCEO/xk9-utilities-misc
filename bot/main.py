@@ -911,10 +911,12 @@ async def _show_users_page(callback_query: CallbackQuery, offset: int):
     users_text = f"👥 <b>Пользователи</b> (с {offset + 1}):\n\n"
     for user in users:
         banned = " 🚫" if user.get("is_banned") else ""
+        balance = user.get('balance') or 0
+        username = html.escape(user.get('first_name') or 'N/A')
         users_text += (
             f"🆔 <code>{user['telegram_id']}</code> | "
-            f"{html.escape(user.get('first_name') or '')} | "
-            f"${user['balance']:,.0f}{banned}\n"
+            f"{username} | "
+            f"${balance:,.0f}{banned}\n"
         )
 
     builder = InlineKeyboardBuilder()
