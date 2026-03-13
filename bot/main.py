@@ -70,6 +70,10 @@ class DonateStates(StatesGroup):
     waiting_for_custom_amount = State()
 
 
+# FSM состояния для многошаговых админ-операций:
+# - управление балансом: ID пользователя → новая сумма баланса
+# - рассылка: текст сообщения
+# - создание промо: код → бонус → макс. использования
 class AdminStates(StatesGroup):
     waiting_for_user_id = State()        # ввод ID/username для изменения баланса
     waiting_for_amount = State()         # ввод суммы баланса
@@ -127,7 +131,21 @@ async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) 
 # === Клавиатуры ===
 
 def _build_admin_data() -> str:
-    """Собрать данные для админ-панели фронтенда и закодировать в base64."""
+    """
+    Собрать данные для админ-панели фронтенда и закодировать в base64.
+
+    Возвращает JSON-словарь (в base64):
+    - users: количество пользователей
+    - bets_today: ставок сегодня
+    - revenue_today: доход казино за день
+    - active_promos: количество активных промо-кодов
+    - activity_24h: массив ставок по часам [24h ago, ..., now]
+    - promo_codes: список всех кодов (code, bonus, max_uses, used_count)
+    - recent_bets: 10 последних ставок с игроком, игрой, ставкой и множителем
+    - maintenance: включен ли режим обслуживания
+
+    Используется в get_main_keyboard для передачи данных в Web App (параметр admindata).
+    """
     stats = get_admin_stats()
     promos = get_promos()
     recent = get_bets_history(limit=20)
@@ -400,13 +418,15 @@ async def handle_webapp_data(message: Message):
 
         data = json.loads(message.web_app_data.data)
 
-        # Обработка админ-действий из Web App (с проверкой прав)
+        # === Обработка админ-действий из Web App (только для ADMIN_IDS) ===
+        # Админ может выполнять операции через скрытую панель в приложении
         action = data.get('action', '')
         if action.startswith('admin_'):
             if telegram_id not in ADMIN_IDS:
                 logger.warning(f"Попытка админ-действия от не-админа: user={telegram_id}, action={action}")
                 return
 
+            # admin_maintenance_toggle: включить/выключить режим обслуживания
             if action == 'admin_maintenance_toggle':
                 current = get_maintenance()
                 set_maintenance(not current)
@@ -415,6 +435,7 @@ async def handle_webapp_data(message: Message):
                 logger.info(f"Admin {telegram_id}: maintenance {'on' if not current else 'off'}")
                 return
 
+            # admin_balance: установить баланс пользователю по ID (user_id, amount)
             if action == 'admin_balance':
                 target_id = data.get('user_id')
                 amount = data.get('amount')
@@ -432,6 +453,7 @@ async def handle_webapp_data(message: Message):
                         await message.answer("❌ Некорректные данные.")
                 return
 
+            # admin_refresh: пересчитать статистику админ-панели
             if action == 'admin_refresh':
                 await message.answer("🔄 Данные обновлены. Перезайдите в приложение для актуальной статистики.")
                 return
@@ -653,7 +675,14 @@ async def cmd_casino(message: Message):
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
-    """Админ панель — главное меню"""
+    """
+    Команда /admin — открыть главное меню администратора.
+
+    Проверка доступа: только ADMIN_IDS могут открыть меню.
+    Отображает текущий статус (режим обслуживания).
+    Показывает инлайн-клавиатуру с опциями: статистика, пользователи, баланс,
+    рассылка, промо-коды, обслуживание, топ игроков.
+    """
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("❌ У вас нет прав администратора.")
         return
@@ -1039,7 +1068,19 @@ async def handle_promo_max_uses_input(message: Message, state: FSMContext):
 
 @dp.message(Command("promo"))
 async def cmd_promo(message: Message):
-    """Использовать промо-код"""
+    """
+    Команда /promo CODE — использовать промо-код пользователем.
+
+    Использование: /promo BONUS100
+
+    Логика:
+    - Проверяет, не забанен ли пользователь
+    - Парсит код из аргументов
+    - Вызывает use_promo для активации (с проверкой лимитов и дублей)
+    - Показывает результат (успех или причину отказа)
+
+    Доступна для всех пользователей.
+    """
     if is_user_banned(message.from_user.id):
         await message.answer("🚫 Ваш аккаунт заблокирован.")
         return

@@ -246,7 +246,17 @@ def set_balance(telegram_id: int, amount: float) -> float:
 
 
 def get_all_users(limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-    """Получить всех пользователей с пагинацией"""
+    """
+    Получить список всех пользователей с пагинацией.
+
+    Параметры:
+    - limit: количество пользователей на страницу (по умолчанию 100)
+    - offset: смещение (для пагинации, стартует с 0)
+
+    Возвращает: список словарей пользователей, отсортированные по дате создания (новые первыми).
+
+    Используется в админ-команде для постраничного просмотра списка пользователей.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -580,7 +590,17 @@ def get_leaderboard() -> Dict[str, Any]:
 # === Бан / разбан ===
 
 def ban_user(telegram_id: int, is_banned: bool) -> bool:
-    """Забанить или разбанить пользователя. Возвращает True если пользователь найден."""
+    """
+    Забанить или разбанить пользователя.
+
+    Параметры:
+    - telegram_id: ID пользователя
+    - is_banned: True для блокировки, False для разблокировки
+
+    Возвращает: True если пользователь найден и обновлен, False если пользователя нет.
+
+    Используется в админ-панели для управления доступом пользователей к казино.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -592,7 +612,16 @@ def ban_user(telegram_id: int, is_banned: bool) -> bool:
 
 
 def is_user_banned(telegram_id: int) -> bool:
-    """Проверить, забанен ли пользователь."""
+    """
+    Проверить, забанен ли пользователь.
+
+    Параметры:
+    - telegram_id: ID пользователя
+
+    Возвращает: True если пользователь в чёрном списке, False иначе или если пользователя нет.
+
+    Используется в обработчиках команд казино для отклонения заблокированных пользователей.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT is_banned FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -603,7 +632,22 @@ def is_user_banned(telegram_id: int) -> bool:
 # === Админ-статистика ===
 
 def get_admin_stats() -> Dict[str, Any]:
-    """Агрегированная статистика для админ-панели."""
+    """
+    Агрегированная статистика для админ-панели.
+
+    Возвращает словарь с ключами:
+    - total_users: количество пользователей
+    - total_bets: всего ставок
+    - total_wagered: всего поставлено (сумма stake)
+    - total_won: всего выиграно (сумма winnings)
+    - revenue: доход казино (total_wagered - total_won)
+    - new_users_today: новых пользователей сегодня
+    - bets_today: ставок сегодня
+    - revenue_today: доход казино за сегодня
+    - bets_by_game: словарь {game_type: количество ставок}
+
+    Используется в админ-команде для вывода статистики и в _build_admin_data (main.py).
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
 
@@ -661,7 +705,18 @@ def get_admin_stats() -> Dict[str, Any]:
 # === Промо-коды ===
 
 def create_promo(code: str, bonus: int, max_uses: int) -> bool:
-    """Создать промо-код. Возвращает True если создан, False если уже существует."""
+    """
+    Создать новый промо-код.
+
+    Параметры:
+    - code: текст кода (будет преобразован в верхний регистр)
+    - bonus: количество монет, которые получит пользователь
+    - max_uses: максимальное количество использований кода
+
+    Возвращает: True если код успешно создан, False если код уже существует.
+
+    Используется в админ-команде /admin → Промо-коды для создания новых кодов активации.
+    """
     try:
         with get_connection() as conn:
             cursor = conn.cursor()
@@ -676,8 +731,23 @@ def create_promo(code: str, bonus: int, max_uses: int) -> bool:
 
 def use_promo(telegram_id: int, code: str) -> Tuple[bool, str]:
     """
-    Использовать промо-код.
-    Возвращает (success, message).
+    Использовать промо-код пользователем.
+
+    Параметры:
+    - telegram_id: ID пользователя
+    - code: текст промо-кода
+
+    Возвращает: (success, message)
+    - success=True: код активирован, пользователю зачислены монеты, message содержит сумму
+    - success=False: код не найден/исчерпан/уже использован, message содержит причину
+
+    Логика:
+    1. Проверяет существование кода
+    2. Проверяет оставшиеся использования (max_uses > used_count)
+    3. Проверяет, не использовал ли пользователь раньше (таблица promo_uses)
+    4. Если всё ОК: зачисляет бонус на balance, увеличивает used_count
+
+    Используется в команде /promo для активации кодов пользователями.
     """
     code = code.upper()
     conn = get_connection()
@@ -727,7 +797,18 @@ def use_promo(telegram_id: int, code: str) -> Tuple[bool, str]:
 
 
 def get_promos() -> List[Dict[str, Any]]:
-    """Получить список всех промо-кодов."""
+    """
+    Получить список всех промо-кодов с информацией об использовании.
+
+    Возвращает: список словарей с ключами:
+    - code: текст кода
+    - bonus: количество монет за активацию
+    - max_uses: лимит использований
+    - used_count: текущее количество использований
+    - created_at: дата создания
+
+    Используется в админ-панели для отображения активных кодов и в _build_admin_data.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM promo_codes ORDER BY created_at DESC")
@@ -737,7 +818,15 @@ def get_promos() -> List[Dict[str, Any]]:
 # === Настройки (режим обслуживания) ===
 
 def set_maintenance(enabled: bool) -> None:
-    """Установить или снять режим обслуживания."""
+    """
+    Установить или снять режим обслуживания.
+
+    Параметры:
+    - enabled: True для включения режима, False для отключения
+
+    При включенном режиме пользователи не могут открыть казино (проверка в handle_webapp_data),
+    админы могут тестировать. Используется в админ-команде для быстрой блокировки казино.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -747,7 +836,14 @@ def set_maintenance(enabled: bool) -> None:
 
 
 def get_maintenance() -> bool:
-    """Получить флаг режима обслуживания."""
+    """
+    Получить статус режима обслуживания.
+
+    Возвращает: True если режим обслуживания включен, False иначе.
+
+    Используется в handle_webapp_data для блокировки казино и в админ-команде
+    для отображения текущего статуса.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT value FROM settings WHERE key = 'maintenance'")
@@ -758,7 +854,17 @@ def get_maintenance() -> bool:
 # === Поиск пользователя ===
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
-    """Поиск пользователя по @username (без учёта регистра)."""
+    """
+    Поиск пользователя по @username (без учёта регистра).
+
+    Параметры:
+    - username: никнейм (с @ или без, преобразуется в нижний регистр)
+
+    Возвращает: словарь пользователя или None если не найден.
+
+    Используется в админ-команде для поиска пользователя при изменении баланса
+    (альтернатива поиску по ID).
+    """
     username = username.lstrip('@')
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -773,7 +879,19 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
 # === История ставок (для админ-панели) ===
 
 def get_bets_history(limit: int = 50, game_type: str = None) -> List[Dict[str, Any]]:
-    """История ставок с JOIN на пользователей. Можно фильтровать по типу игры."""
+    """
+    История ставок с информацией о пользователях (JOIN на таблицу users).
+
+    Параметры:
+    - limit: максимальное количество записей (по умолчанию 50)
+    - game_type: фильтр по типу игры (например, 'rocket' или 'minesweeper'), если None — все игры
+
+    Возвращает: список словарей с данными ставок (от games) плюс first_name и username пользователя.
+
+    Сортировка: по дате создания в обратном порядке (новые ставки первыми).
+
+    Используется в админ-панели для отображения истории ставок и в _build_admin_data.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         if game_type:
@@ -799,7 +917,17 @@ def get_bets_history(limit: int = 50, game_type: str = None) -> List[Dict[str, A
 
 
 def get_activity_24h() -> List[int]:
-    """Количество ставок по часам за последние 24 часа (массив из 24 элементов для графика)."""
+    """
+    Количество ставок по часам за последние 24 часа (для графика активности).
+
+    Возвращает: список из 24 целых чисел [h24, h23, ..., h1, h0], где:
+    - h0 — ставки за текущий час
+    - h1 — ставки за час назад
+    - h24 — ставки за 24 часа назад
+
+    Используется в админ-панели для отображения графика активности казино
+    и в _build_admin_data.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
