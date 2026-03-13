@@ -1584,14 +1584,16 @@ function openModal(emoji, title, sub, amount, isWin) {
     if (isWin===true)  hNotify('success');
     if (isWin===false) hNotify('error');
 }
-document.getElementById('mCloseBtn').addEventListener('click', () => {
+let autoCloseTimer = null;
+function closeModal() {
+    if (autoCloseTimer) { clearTimeout(autoCloseTimer); autoCloseTimer = null; }
     document.getElementById('modal').classList.remove('open');
     confStop();
-});
+}
+document.getElementById('mCloseBtn').addEventListener('click', closeModal);
 document.getElementById('modal').addEventListener('click', e => {
     if (e.target.id === 'modal') {
-        document.getElementById('modal').classList.remove('open');
-        confStop();
+        closeModal();
     }
 });
 
@@ -1932,7 +1934,7 @@ function rCrash() {
     R.els.betInput.disabled=false;
     R.els.btn.textContent='Сделать ставку'; R.els.btn.className='btn btn-brand';
     haptic('heavy');
-    setTimeout(()=>openModal('💥','Краш!','Упало на x'+R.crashAt.toFixed(2),'-'+fmtFull(R.bet),false),650);
+    setTimeout(()=>{ openModal('💥','Краш!','Упало на x'+R.crashAt.toFixed(2),'-'+fmtFull(R.bet),false); autoCloseTimer=setTimeout(closeModal,1500); },650);
 }
 
 document.getElementById('rActionBtn').addEventListener('click', ()=>{
@@ -2072,6 +2074,7 @@ async function mGameOver(hitIdx) {
     sendResult('minesweeper',Mine.bet,false,0,-Mine.bet,0);
     setTimeout(()=>{
         openModal('💥','Мина!','Открыто безопасных: '+Mine.safe.size,'-'+fmtFull(Mine.bet),false);
+        autoCloseTimer=setTimeout(closeModal,1500);
         mResetUI();
     }, others.length*90+300);
 }
@@ -2362,6 +2365,7 @@ function ldGameOver() {
     openModal('💥', 'Упал!',
         'Дошёл до ряда ' + rowReached + ' из ' + LD_ROWS,
         '-' + fmtFull(LD.bet), false);
+    autoCloseTimer = setTimeout(closeModal, 1500);
     ldResetUI();
 }
 
