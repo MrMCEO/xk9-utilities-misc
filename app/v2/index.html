@@ -1594,8 +1594,9 @@ function applyRipples() {
    TELEGRAM
 ════════════════════════════════════ */
 const BOT_USERNAME = 'BFGCasinoBot';
-const tg     = window.Telegram?.WebApp || {};
-const tgUser = tg.initDataUnsafe?.user || {};
+const tg      = window.Telegram?.WebApp || {};
+const tgUser  = tg.initDataUnsafe?.user || {};
+const urlParams = new URLSearchParams(window.location.search);
 if (tg.ready) { tg.ready(); tg.expand(); tg.disableVerticalSwipes?.(); }
 function haptic(t)  { try { tg.HapticFeedback?.impactOccurred(t||'light'); }       catch(e){} }
 function hNotify(t) { try { tg.HapticFeedback?.notificationOccurred(t||'success'); } catch(e){} }
@@ -2938,7 +2939,6 @@ applyRipples();
 ════════════════════════════════════════════════════════ */
 (function initAdmin() {
     const ADMIN_IDS = [7571908975];
-    const urlParams = new URLSearchParams(window.location.search);
     const isAdmin = urlParams.get('admin') === '1' &&
                     ADMIN_IDS.includes(tg?.initDataUnsafe?.user?.id);
 
