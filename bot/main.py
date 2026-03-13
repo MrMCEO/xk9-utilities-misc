@@ -114,6 +114,9 @@ async def cmd_start(message: Message, command: CommandObject):
         return
 
     donate_bal = get_donate_balance(message.from_user.id)
+    # Устанавливаем персональную кнопку меню (нижняя кнопка Telegram) с уникальным URL,
+    # содержащим текущий баланс пользователя (query-параметры b и db)
+    # Это даёт каждому пользователю персональный URL с его балансом, отправляемый Web App при загрузке
     await bot.set_chat_menu_button(
         chat_id=message.from_user.id,
         menu_button=MenuButtonWebApp(
@@ -231,9 +234,9 @@ async def cmd_history(message: Message):
 
 # === Обработка данных от Web App ===
 
-MAX_MULTIPLIER = 1000.0  # Максимально допустимый множитель от Web App
-MAX_STAKE = 10_000_000  # Максимально допустимая ставка
-VALID_GAME_TYPES = {'rocket', 'minesweeper'}  # Допустимые типы игр
+MAX_MULTIPLIER = 1000.0  # Максимально допустимый множитель от Web App (защита от экстремальных значений через DevTools)
+MAX_STAKE = 10_000_000  # Максимально допустимая ставка (защита от переполнения баланса при списании)
+VALID_GAME_TYPES = {'rocket', 'minesweeper'}  # Допустимые типы игр из Web App (валидация в handle_webapp_data)
 
 
 @dp.message(F.web_app_data)
