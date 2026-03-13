@@ -2590,8 +2590,8 @@ function initiatePayment(amount) {
     if (tg.openInvoice) {
         tg.openInvoice(invoiceUrl, result => handleInvoiceClosed(amount, result));
     } else {
-        /* Fallback for browser preview — simulate success */
-        handleInvoiceClosed(amount, { status: 'paid' });
+        closeDeposit();
+        openModal('ℹ️', 'Только в Telegram', 'Откройте приложение через бота @' + BOT_USERNAME, '', null);
     }
 }
 
