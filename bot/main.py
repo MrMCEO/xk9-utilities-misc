@@ -32,6 +32,10 @@ from database import (
     get_recent_games,
     add_donation,
     get_user_donations,
+    get_donate_balance,
+    add_donate_balance,
+    update_donate_balance,
+    update_donate_balance_checked,
 )
 
 # Настройка логирования
@@ -150,10 +154,18 @@ async def cmd_help(message: Message):
 
 
 @dp.message(F.text == "💰 Баланс")
+@dp.message(Command("balance"))
 async def cmd_balance(message: Message):
     """Показать баланс"""
-    balance = get_user_balance(message.from_user.id)
-    await message.answer(f"💰 <b>Ваш баланс:</b> ${balance:,.2f}")
+    uid = message.from_user.id
+    balance = get_user_balance(uid)
+    donate_balance = get_donate_balance(uid)
+    await message.answer(
+        f"💰 <b>Ваш баланс:</b>\n\n"
+        f"💰 Основной баланс: <b>{balance:,.0f} монет</b>\n"
+        f"⭐ Донатный баланс: <b>{donate_balance:,} монет</b>",
+        parse_mode='HTML'
+    )
 
 
 @dp.message(F.text == "📊 Моя статистика")
@@ -603,7 +615,7 @@ async def handle_successful_payment(message: Message):
             f"✅ <b>Баланс пополнен!</b>\n\n"
             f"Оплачено: <b>{amount_stars} ⭐</b>\n"
             f"Зачислено: <b>{coins:,} монет</b>\n"
-            f"Текущий баланс: <b>${new_balance:,.2f}</b>",
+            f"⭐ Донатный баланс: <b>{new_balance:,} монет</b>",
             parse_mode='HTML'
         )
     except Exception as e:
