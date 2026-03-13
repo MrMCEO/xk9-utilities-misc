@@ -152,6 +152,51 @@ body>* { position:relative; z-index:1; }
 }
 .theme-btn:active { transform:scale(0.84) rotate(25deg); }
 
+.balance-block-wrap {
+    display:flex; gap:10px; align-items:center;
+}
+
+.bal-donate {
+    font-size:15px; font-weight:800;
+    color:#a78bfa;
+    letter-spacing:-.3px;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+    transition:color .25s;
+}
+
+/* Wallet toggle pill */
+.wallet-toggle {
+    display:flex; align-items:center;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:20px;
+    padding:3px;
+    gap:2px;
+    margin-bottom:9px;
+    transition:var(--tr);
+}
+.wt-btn {
+    flex:1; padding:7px 10px;
+    border:none; border-radius:16px;
+    background:transparent;
+    color:var(--muted);
+    font-size:12px; font-weight:700;
+    cursor:pointer;
+    transition:var(--tr), transform .12s;
+    white-space:nowrap;
+}
+.wt-btn.active {
+    background:var(--brand);
+    color:#fff;
+    box-shadow:0 2px 10px var(--brand-mid);
+}
+.wt-btn.active.donate {
+    background:linear-gradient(135deg,#7c3aed,#a78bfa);
+    box-shadow:0 2px 10px rgba(167,139,250,0.35);
+}
+.wt-btn:active { transform:scale(0.93); }
+
 .deposit-btn {
     height:32px;
     padding:0 12px;
@@ -909,9 +954,15 @@ main { flex:1; overflow:hidden; position:relative; }
 <header class="header">
     <div class="logo">BFG</div>
     <div class="header-right">
-        <div class="balance-block">
-            <div class="bal-label">Баланс</div>
-            <div class="bal-val" id="balVal">$1 000 000</div>
+        <div class="balance-block-wrap">
+            <div class="balance-block">
+                <div class="bal-label">Баланс</div>
+                <div class="bal-val" id="balVal">$1 000 000</div>
+            </div>
+            <div class="balance-block">
+                <div class="bal-label">Звёзды</div>
+                <div class="bal-donate" id="balDonate">⭐ 0</div>
+            </div>
         </div>
         <button class="deposit-btn" id="depositBtn" title="Пополнить баланс">+ Пополнить</button>
         <button class="theme-btn" id="themeBtn">🌙</button>
@@ -943,6 +994,11 @@ main { flex:1; overflow:hidden; position:relative; }
     </div>
 
     <div class="card">
+        <div class="sec-label">Кошелёк</div>
+        <div class="wallet-toggle" id="rWalletToggle">
+            <button class="wt-btn active" data-wallet="main">💰 Основной</button>
+            <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
+        </div>
         <div class="sec-label">Ставка</div>
         <input type="number" class="bet-input" id="rBetInput" value="100" min="1">
         <div class="quick-bets">
@@ -1001,6 +1057,11 @@ main { flex:1; overflow:hidden; position:relative; }
             </div>
         </div>
         <div class="card">
+            <div class="sec-label">Кошелёк</div>
+            <div class="wallet-toggle" id="mWalletToggle">
+                <button class="wt-btn active" data-wallet="main">💰 Основной</button>
+                <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
+            </div>
             <div class="sec-label">Ставка</div>
             <input type="number" class="bet-input" id="mBetInput" value="100" min="1">
             <div class="quick-bets">
@@ -1064,6 +1125,11 @@ main { flex:1; overflow:hidden; position:relative; }
             </div>
         </div>
         <div class="card">
+            <div class="sec-label">Кошелёк</div>
+            <div class="wallet-toggle" id="lWalletToggle">
+                <button class="wt-btn active" data-wallet="main">💰 Основной</button>
+                <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
+            </div>
             <div class="sec-label">Ставка</div>
             <input type="number" class="bet-input" id="lBetInput" value="100" min="1">
             <div class="quick-bets">
@@ -1169,23 +1235,93 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 function loadBalance() {
     try { const v = localStorage.getItem('bfg_balance'); return v !== null ? parseFloat(v) : 1_000_000; } catch(e) { return 1_000_000; }
 }
+function loadDonateBalance() {
+    try { const v = localStorage.getItem('bfg_donate_balance'); return v !== null ? parseFloat(v) : 0; } catch(e) { return 0; }
+}
 let balance = loadBalance();
-const balEl = document.getElementById('balVal');
+let donateBalance = loadDonateBalance();
+
+/* Активный кошелёк: 'main' или 'donate' */
+let activeWallet = 'main';
+try { activeWallet = localStorage.getItem('bfg_active_wallet') || 'main'; } catch(e) {}
+
+const balEl     = document.getElementById('balVal');
+const balDonEl  = document.getElementById('balDonate');
 
 function fmtFull(v)  { return '$' + Math.abs(v).toLocaleString('ru-RU', {maximumFractionDigits:2}); }
 function fmtShort(v) {
     if (v >= 1_000_000) return '$' + (v/1_000_000).toFixed(2) + 'M';
     return '$' + Math.round(v).toLocaleString('ru-RU');
 }
+function fmtDonate(v) { return '⭐ ' + Math.round(v).toLocaleString('ru-RU'); }
 
 function changeBalance(delta) {
-    balance += delta;
-    try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
-    balEl.textContent = fmtShort(balance);
-    balEl.classList.remove('fu','fd');
-    void balEl.offsetWidth;
-    balEl.classList.add(delta >= 0 ? 'fu' : 'fd');
+    if (activeWallet === 'donate') {
+        donateBalance += delta;
+        try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+        balDonEl.textContent = fmtDonate(donateBalance);
+    } else {
+        balance += delta;
+        try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
+        balEl.textContent = fmtShort(balance);
+        balEl.classList.remove('fu','fd');
+        void balEl.offsetWidth;
+        balEl.classList.add(delta >= 0 ? 'fu' : 'fd');
+    }
 }
+
+/* Получить текущий активный баланс */
+function getActiveBalance() {
+    return activeWallet === 'donate' ? donateBalance : balance;
+}
+
+/* Синхронизировать отображение обоих балансов */
+function renderBalances() {
+    balEl.textContent    = fmtShort(balance);
+    balDonEl.textContent = fmtDonate(donateBalance);
+}
+
+/* Переключить активный кошелёк и синхронизировать все тогглы */
+function setActiveWallet(wallet) {
+    activeWallet = wallet;
+    try { localStorage.setItem('bfg_active_wallet', wallet); } catch(e) {}
+    document.querySelectorAll('.wallet-toggle').forEach(toggle => {
+        toggle.querySelectorAll('.wt-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.wallet === wallet);
+        });
+    });
+}
+
+/* Привязать клики на все тогглы кошелька */
+document.querySelectorAll('.wallet-toggle').forEach(toggle => {
+    toggle.addEventListener('click', e => {
+        const btn = e.target.closest('.wt-btn');
+        if (!btn) return;
+        setActiveWallet(btn.dataset.wallet);
+        haptic('light');
+    });
+});
+
+/* При получении donateBalance от бота через Telegram.WebApp */
+if (tg.onEvent) {
+    tg.onEvent('mainButtonClicked', () => {});
+    /* Бот может прислать donateBalance через sendData — слушаем через события */
+}
+
+/* Инициализация из tg.initDataUnsafe (расширение на будущее — бот может туда положить) */
+(function initDonateFromTg() {
+    try {
+        const ud = tg.initDataUnsafe;
+        if (ud && ud.start_param) {
+            /* start_param=donate_BALANCE — бот может передавать стартовый донатный баланс */
+            const m = ud.start_param.match(/^db(\d+)$/);
+            if (m) {
+                donateBalance = parseInt(m[1]);
+                try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+            }
+        }
+    } catch(e) {}
+})();
 
 function sendResult(game, stake, won, winnings, profit, mult) {
     try {
@@ -1573,7 +1709,8 @@ function rPushHistory(mult, won) {
 function rStart() {
     const bet = parseFloat(R.els.betInput.value);
     if (!bet||bet<=0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
-    if (bet>balance)  { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+    const avail = getActiveBalance();
+    if (bet>avail) { openModal('⚠️','Мало средств','',activeWallet==='donate'?fmtDonate(avail):fmtShort(avail),null); return; }
 
     R.active=true; R.cashedOut=false;
     R.mult=1.0; R.crashAt=rGenCrash(); R.bet=bet; R.t0=Date.now();
@@ -1693,7 +1830,8 @@ function mPlaceMines() {
 function mStart() {
     const bet=parseFloat(document.getElementById('mBetInput').value);
     if(!bet||bet<=0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
-    if(bet>balance)  { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+    const avail = getActiveBalance();
+    if(bet>avail) { openModal('⚠️','Мало средств','',activeWallet==='donate'?fmtDonate(avail):fmtShort(avail),null); return; }
 
     Mine.active=true; Mine.safe.clear();
     Mine.bet=bet; Mine.mult=1.0;
@@ -1834,7 +1972,8 @@ document.getElementById('mMineInput').addEventListener('input', function(){
     } catch(e) {}
 })();
 
-balEl.textContent = fmtShort(balance);
+renderBalances();
+setActiveWallet(activeWallet);
 mBuildGrid();
 
 /* ════════════════════════════════════════════════════════
@@ -2084,7 +2223,8 @@ function ldResetUI() {
 function ldStart() {
     const bet = parseFloat(LDel.betInput.value);
     if (!bet || bet <= 0) { openModal('⚠️','Ошибка','','Введите корректную ставку',null); return; }
-    if (bet > balance)    { openModal('⚠️','Мало средств','',fmtShort(balance),null); return; }
+    const avail = getActiveBalance();
+    if (bet > avail) { openModal('⚠️','Мало средств','',activeWallet==='donate'?fmtDonate(avail):fmtShort(avail),null); return; }
 
     LD.bet        = bet;
     LD.active     = true;
