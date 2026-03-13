@@ -1,6 +1,7 @@
 import logging
 import json
 import random
+import html
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -130,7 +131,7 @@ async def cmd_start(message: Message, command: CommandObject):
         pass
     await message.answer(
         f"🎰 <b>Добро пожаловать в BFG Casino!</b>\n\n"
-        f"👤 {message.from_user.first_name}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
+        f"👤 {html.escape(message.from_user.first_name or '')}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
         f"🚀 Запускайте игру и испытайте удачу!\n"
         f"Нажмите кнопку ниже 👇",
         reply_markup=get_main_keyboard(user['balance'], donate_bal),
@@ -510,7 +511,7 @@ async def cb_admin_users(callback_query: CallbackQuery):
     for user in users:
         users_text += (
             f"🆔 <code>{user['telegram_id']}</code> | "
-            f"{user['first_name']} | "
+            f"{html.escape(user['first_name'] or '')} | "
             f"${user['balance']:,.2f}\n"
         )
 
@@ -541,7 +542,7 @@ async def cb_admin_stats(callback_query: CallbackQuery):
     for game in recent_games:
         emoji = "✅" if game['result'] == 'win' else "❌"
         stats_text += (
-            f"{emoji} {game.get('first_name', 'Unknown')} | "
+            f"{emoji} {html.escape(game.get('first_name') or 'Unknown')} | "
             f"{game['game_type']} | "
             f"${game['stake']:.2f} → ${game['winnings']:.2f}\n"
         )
@@ -604,7 +605,7 @@ async def cmd_stats(message: Message):
 
     top = ""
     for i, p in enumerate(s["top_players"], 1):
-        name = p.get("first_name") or p.get("username") or "Unknown"
+        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
         top += f"  {i}. {name} — {p['game_count']} игр\n"
     if not top:
         top = "  нет данных\n"
