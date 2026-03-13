@@ -2141,7 +2141,7 @@ function rDraw(elapsed, crashed) {
         const angleRad = Math.atan2(-dy, dx); // angle above horizontal (radians)
         // 🚀 emoji default orientation ≈ 45° (upper-right).
         // Rotate so it faces direction of travel (tangent to curve):
-        const rotateDeg = -(45 - angleRad * 180 / Math.PI);
+        const rotateDeg = 45 - angleRad * 180 / Math.PI;
 
         const el = R.els.rocket;
         const ew = 26; // emoji visual width approx
