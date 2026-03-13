@@ -138,7 +138,17 @@ async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) 
 INIT_DATA_MAX_AGE = 300  # секунд (5 минут) — защита от replay-атак
 
 def verify_init_data(init_data: str) -> dict | None:
-    """Верифицирует Telegram initData через HMAC-SHA256. Возвращает dict с user или None."""
+    """Верифицирует Telegram initData через HMAC-SHA256. Возвращает dict с user или None.
+
+    Алгоритм:
+    1. Распарсивает initData (query-string: hash, auth_date, user, ...)
+    2. Вычисляет HMAC-SHA256 на основе всех параметров кроме hash:
+       - Ключ 1: HMAC(BOT_TOKEN, 'WebAppData') -> secret_key
+       - Ключ 2: HMAC(secret_key, sorted(params))
+    3. Сравнивает полученный хеш с переданным (constant-time)
+    4. Проверяет auth_date не старше INIT_DATA_MAX_AGE (защита от replay-атак)
+    5. Возвращает распарсиванный user JSON или None если любая проверка не пройдена
+    """
     try:
         if not init_data:
             return None
@@ -163,7 +173,18 @@ def verify_init_data(init_data: str) -> dict | None:
 
 
 async def process_game_result(telegram_id: int, data: dict) -> dict:
-    """Обрабатывает результат игры из Web App. Возвращает {'ok': bool, 'balance': int, 'error': str}."""
+    """Обрабатывает результат игры из Web App. Возвращает {'ok': bool, 'balance': int, 'error': str}.
+
+    Шаги обработки:
+    1. Проверить статусы (забанен ли, режим обслуживания)
+    2. Парсить game_type (rocket/minesweeper), stake, multiplier, won
+    3. Валидировать все параметры на диапазоны (MIN_STAKE <= stake <= MAX_STAKE, и т.д.)
+    4. Определить кошелёк (main или donate)
+    5. Снять ставку со счёта (с проверкой sufficient_funds)
+    6. Если выиграл: начислить winnings = stake * multiplier
+    7. Записать результат в историю игр (add_game)
+    8. Вернуть финальный баланс
+    """
     if is_user_banned(telegram_id):
         return {'ok': False, 'error': 'banned'}
     if get_maintenance() and telegram_id not in ADMIN_IDS:
@@ -234,7 +255,22 @@ _CORS_HEADERS = {
 
 
 async def handle_game_api(request: aio_web.Request) -> aio_web.Response:
-    """POST /api/game — принимает результат игры из Web App, проверяет initData, обновляет БД."""
+    """POST /api/game — HTTP endpoint для передачи результата игры из Web App.
+
+    Запрос должен содержать:
+    - initData (Telegram WebApp init data, подписанный ключом бота)
+    - game, stake, multiplier, won, wallet
+
+    Обработка:
+    1. Если OPTIONS — вернуть CORS-заголовки (preflight)
+    2. Парсить JSON body
+    3. Верифицировать initData (HMAC-SHA256), прерваться если некорректно
+    4. Вызвать process_game_result с распарсиванным user_id и игровыми данными
+    5. Вернуть результат (200 если успех, 400 если игровая ошибка, 500 если краш сервера)
+    6. Все ответы — JSON с CORS-заголовками
+
+    Ответ: {'ok': bool, 'balance': int, 'error': str}
+    """
     if request.method == 'OPTIONS':
         return aio_web.Response(headers=_CORS_HEADERS)
     try:
@@ -252,7 +288,14 @@ async def handle_game_api(request: aio_web.Request) -> aio_web.Response:
 
 
 async def start_api_server() -> None:
-    """Запустить aiohttp HTTP сервер для приёма результатов игр из Web App."""
+    """Запустить aiohttp HTTP сервер для приёма результатов игр из Web App.
+
+    Запускается только если BOT_API_URL и BOT_API_PORT определены в .env.
+    Иначе выход (функция не нужна на VPS без туннеля/доменного имени).
+
+    Создает рут:
+    - POST /api/game (с CORS preflight на OPTIONS)
+    """
     if not BOT_API_URL:
         return
     app = aio_web.Application()
@@ -954,7 +997,11 @@ async def cb_admin_balance(callback_query: CallbackQuery, state: FSMContext):
 
 @dp.message(StateFilter(AdminStates.waiting_for_user_id))
 async def handle_admin_user_id(message: Message, state: FSMContext):
-    """Обработать ввод ID/username для изменения баланса"""
+    """Обработать ввод ID/username для изменения баланса.
+
+    StateFilter защищает от обработки сообщений пользователей, которые не в FSM-состоянии.
+    Без StateFilter сообщение могло бы обработаться несколькими хендлерами одновременно.
+    """
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
@@ -983,7 +1030,10 @@ async def handle_admin_user_id(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(AdminStates.waiting_for_amount))
 async def handle_admin_amount(message: Message, state: FSMContext):
-    """Обработать ввод суммы для установки баланса"""
+    """Обработать ввод суммы для установки баланса.
+
+    StateFilter защищает обработчик от активации при других состояниях FSM.
+    """
     logger.info(f"handle_admin_amount triggered: user={message.from_user.id}, text={message.text!r}")
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
@@ -1058,7 +1108,11 @@ async def cb_admin_broadcast(callback_query: CallbackQuery, state: FSMContext):
 
 @dp.message(StateFilter(AdminStates.waiting_for_broadcast_text))
 async def handle_broadcast_text(message: Message, state: FSMContext):
-    """Подтверждение и отправка рассылки"""
+    """Подтверждение и отправка рассылки.
+
+    StateFilter гарантирует, что хендлер срабатывает только когда пользователь находится
+    в ожидании ввода текста рассылки (управление FSM-переходами).
+    """
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
@@ -1142,7 +1196,11 @@ async def cb_admin_create_promo(callback_query: CallbackQuery, state: FSMContext
 
 @dp.message(StateFilter(AdminStates.waiting_for_promo_code))
 async def handle_promo_code_input(message: Message, state: FSMContext):
-    """Обработать ввод кода промо"""
+    """Обработать ввод кода промо.
+
+    StateFilter ограничивает обработку только сообщениями, когда пользователь в FSM-состоянии
+    ввода кода промо (отклоняет остальные команды и сообщения).
+    """
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
@@ -1159,7 +1217,10 @@ async def handle_promo_code_input(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(AdminStates.waiting_for_promo_bonus))
 async def handle_promo_bonus_input(message: Message, state: FSMContext):
-    """Обработать ввод бонуса промо"""
+    """Обработать ввод бонуса промо.
+
+    StateFilter гарантирует, что сообщение обрабатывается только в правильном FSM-состоянии.
+    """
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
@@ -1181,7 +1242,10 @@ async def handle_promo_bonus_input(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(AdminStates.waiting_for_promo_max_uses))
 async def handle_promo_max_uses_input(message: Message, state: FSMContext):
-    """Обработать ввод макс. использований и создать промо"""
+    """Обработать ввод макс. использований и создать промо.
+
+    StateFilter защищает обработчик от обработки сообщений вне правильного FSM-состояния.
+    """
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return

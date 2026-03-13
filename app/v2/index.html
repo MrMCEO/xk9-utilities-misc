@@ -2140,7 +2140,10 @@ function rDraw(elapsed, crashed) {
         const dy = tip.y - prev.y; // negative = going up
         const angleRad = Math.atan2(-dy, dx); // angle above horizontal (radians)
         // 🚀 emoji default orientation ≈ 45° (upper-right).
-        // Rotate so it faces direction of travel (tangent to curve):
+        // Поворот ракеты по касательной к траектории (чтобы она смотрела в направление движения):
+        // 1. angleRad = arctangent(-dy/dx) вычисляет угол касательной к кривой
+        // 2. Конвертируем из радиан в градусы и вычитаем из 45° (базовый угол emoji)
+        // 3. rotateDeg = 45 - angleRad*180/π = угол для CSS transform:rotate()
         const rotateDeg = 45 - angleRad * 180 / Math.PI;
 
         const el = R.els.rocket;
