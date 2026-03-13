@@ -1308,16 +1308,28 @@ if (tg.onEvent) {
     /* Бот может прислать donateBalance через sendData — слушаем через события */
 }
 
-/* Инициализация из tg.initDataUnsafe (расширение на будущее — бот может туда положить) */
+/* Инициализация донатного баланса из URL-параметра ?db=N (передаётся ботом) */
 (function initDonateFromTg() {
     try {
-        const ud = tg.initDataUnsafe;
-        if (ud && ud.start_param) {
-            /* start_param=donate_BALANCE — бот может передавать стартовый донатный баланс */
-            const m = ud.start_param.match(/^db(\d+)$/);
-            if (m) {
-                donateBalance = parseInt(m[1]);
+        /* Читаем ?db= из URL — бот передаёт актуальный donate_balance при открытии */
+        const urlDb = new URLSearchParams(window.location.search).get('db');
+        if (urlDb !== null) {
+            const val = parseInt(urlDb);
+            if (!isNaN(val) && val >= 0) {
+                donateBalance = val;
                 try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+                balDonEl.textContent = fmtDonate(donateBalance);
+            }
+        } else {
+            /* Fallback: start_param из Telegram initData */
+            const ud = tg.initDataUnsafe;
+            if (ud && ud.start_param) {
+                const m = ud.start_param.match(/^db(\d+)$/);
+                if (m) {
+                    donateBalance = parseInt(m[1]);
+                    try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+                    balDonEl.textContent = fmtDonate(donateBalance);
+                }
             }
         }
     } catch(e) {}

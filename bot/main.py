@@ -58,10 +58,11 @@ init_db()
 
 # === Клавиатуры ===
 
-def get_main_keyboard() -> ReplyKeyboardMarkup:
+def get_main_keyboard(donate_balance: int = 0) -> ReplyKeyboardMarkup:
     """Основная клавиатура с кнопкой Web App"""
     builder = ReplyKeyboardBuilder()
-    builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=WEB_APP_URL))
+    url = f"{WEB_APP_URL}?db={donate_balance}"
+    builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=url))
     builder.button(text="🎰 Казино")
     builder.button(text="📊 Моя статистика")
     builder.button(text="💰 Баланс")
@@ -104,12 +105,13 @@ async def cmd_start(message: Message, command: CommandObject):
         )
         return
 
+    donate_bal = get_donate_balance(message.from_user.id)
     await message.answer(
         f"🎰 <b>Добро пожаловать в BFG Casino!</b>\n\n"
         f"👤 {message.from_user.first_name}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
         f"🚀 Запускайте игру и испытайте удачу!\n"
         f"Нажмите кнопку ниже 👇",
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(donate_bal),
     )
 
 
@@ -122,7 +124,7 @@ async def cmd_play(message: Message):
         "🚀 Ракета · 💣 Сапер\n"
         "Выбирай игру и испытай удачу!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=WEB_APP_URL))]
+            [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=f"{WEB_APP_URL}?db={get_donate_balance(message.from_user.id)}"))]
         ])
     )
 
