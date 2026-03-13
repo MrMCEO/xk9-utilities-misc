@@ -1339,7 +1339,8 @@ function sendResult(game, stake, won, winnings, profit, mult) {
     try {
         tg.sendData && tg.sendData(JSON.stringify({
             type:'game_result', game, stake, won,
-            winnings, profit, multiplier:mult, user:tgUser
+            winnings, profit, multiplier:mult, user:tgUser,
+            wallet: activeWallet
         }));
     } catch(e) {}
 }
