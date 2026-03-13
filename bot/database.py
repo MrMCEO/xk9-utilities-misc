@@ -507,3 +507,30 @@ def get_global_stats() -> Dict[str, Any]:
         "total_donations": total_donations,
         "total_stars": total_stars,
     }
+
+
+def get_leaderboard() -> Dict[str, Any]:
+    """Топ-5 игроков по балансу и по количеству игр"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT first_name, username, balance
+            FROM users
+            WHERE balance IS NOT NULL
+            ORDER BY balance DESC
+            LIMIT 5
+        """)
+        top_balance = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT u.first_name, u.username, COUNT(g.id) as game_count
+            FROM games g
+            JOIN users u ON g.telegram_id = u.telegram_id
+            GROUP BY g.telegram_id
+            ORDER BY game_count DESC
+            LIMIT 5
+        """)
+        top_games = [dict(row) for row in cursor.fetchall()]
+
+    return {"top_balance": top_balance, "top_games": top_games}

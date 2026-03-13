@@ -39,6 +39,7 @@ from database import (
     update_donate_balance,
     update_donate_balance_checked,
     get_global_stats,
+    get_leaderboard,
 )
 
 # Настройка логирования
@@ -617,6 +618,33 @@ async def cmd_stats(message: Message):
         f"🏆 <b>Топ-3 игрока:</b>\n{top}\n"
         f"💸 Донатов: <b>{s['total_donations']}</b> "
         f"на <b>{s['total_stars']:,} ⭐</b>"
+    )
+    await message.answer(text)
+
+
+@dp.message(Command("leaderboard"))
+async def cmd_leaderboard(message: Message):
+    """Топ-5 игроков по балансу и по количеству игр"""
+    lb = get_leaderboard()
+
+    balance_lines = ""
+    for i, p in enumerate(lb["top_balance"], 1):
+        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
+        balance_lines += f"  {i}. {name} — <b>${p['balance']:,.0f}</b>\n"
+    if not balance_lines:
+        balance_lines = "  нет данных\n"
+
+    games_lines = ""
+    for i, p in enumerate(lb["top_games"], 1):
+        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
+        games_lines += f"  {i}. {name} — <b>{p['game_count']} игр</b>\n"
+    if not games_lines:
+        games_lines = "  нет данных\n"
+
+    text = (
+        f"🏆 <b>Топ игроков</b>\n\n"
+        f"💰 <b>По балансу:</b>\n{balance_lines}\n"
+        f"🎮 <b>По играм:</b>\n{games_lines}"
     )
     await message.answer(text)
 
