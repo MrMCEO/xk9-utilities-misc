@@ -372,20 +372,20 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
     stats = cursor.fetchone()
     conn.close()
 
-        if stats and stats["total_games"] > 0:
-            stats = dict(stats)
-            stats["win_rate"] = (stats["wins"] / stats["total_games"]) * 100
-            stats["profit"] = stats["total_winnings"] - stats["total_staked"]
-        else:
-            stats = {
-                "total_games": 0,
-                "wins": 0,
-                "losses": 0,
-                "total_staked": 0,
-                "total_winnings": 0,
-                "win_rate": 0,
-                "profit": 0
-            }
+    if stats and stats["total_games"] > 0:
+        stats = dict(stats)
+        stats["win_rate"] = (stats["wins"] / stats["total_games"]) * 100
+        stats["profit"] = stats["total_winnings"] - stats["total_staked"]
+    else:
+        stats = {
+            "total_games": 0,
+            "wins": 0,
+            "losses": 0,
+            "total_staked": 0,
+            "total_winnings": 0,
+            "win_rate": 0,
+            "profit": 0
+        }
 
         return stats
 
