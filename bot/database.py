@@ -85,7 +85,7 @@ def init_db() -> None:
 
 
 def close_db() -> None:
-    """Закрытие БД (для SQLite не требуется)"""
+    """Закрытие БД (для SQLite не требуется, оставлено для совместимости)"""
     pass
 
 
@@ -375,7 +375,10 @@ def get_user_stats(telegram_id: int) -> Dict[str, Any]:
 
 
 def get_recent_games(limit: int = 10) -> List[Dict[str, Any]]:
-    """Получить последние игры всех пользователей"""
+    """
+    Получить последние игры всех пользователей с информацией о игроке.
+    Используется для администраторской статистики.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
