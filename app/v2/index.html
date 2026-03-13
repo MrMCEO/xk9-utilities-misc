@@ -3012,16 +3012,24 @@ applyRipples();
             ctx.fillText(i + 'ч', 24 + i * barW + barW / 2, h - 4);
         }
     }
-    /* Перерисовка при смене темы */
-    const origApplyTheme = window.applyTheme;
-    /* requestAnimationFrame чтобы chart обновился после смены CSS */
+    /* Перерисовка графика при смене темы (наблюдаем за data-theme на html) */
+    new MutationObserver(() => requestAnimationFrame(drawChart))
+        .observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    /* Первая отрисовка */
     requestAnimationFrame(drawChart);
+
+    /* ── Экранирование HTML для защиты от XSS ── */
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s ?? '');
+        return d.innerHTML;
+    }
 
     /* ── Промо-коды ── */
     const promos = adminData.promo_codes || [];
     if (promos.length > 0) {
         document.getElementById('adPromoBody').innerHTML = promos.map(p =>
-            `<tr><td>${p.code}</td><td>${p.bonus}</td><td>${p.uses_left}</td></tr>`
+            `<tr><td>${esc(p.code)}</td><td>${esc(p.bonus)}</td><td>${esc(p.uses_left)}</td></tr>`
         ).join('');
     }
 
@@ -3030,11 +3038,11 @@ applyRipples();
     if (bets.length > 0) {
         document.getElementById('adBetsBody').innerHTML = bets.map(b =>
             `<tr>
-                <td>${b.player || b.user_id || '—'}</td>
-                <td>${b.game || '—'}</td>
-                <td>$${(b.stake || 0).toLocaleString('ru-RU')}</td>
+                <td>${esc(b.player || b.user_id || '—')}</td>
+                <td>${esc(b.game || '—')}</td>
+                <td>$${esc((b.stake || 0).toLocaleString('ru-RU'))}</td>
                 <td class="${b.won ? 'win-cell' : 'lose-cell'}">${b.won ? 'Win' : 'Lose'}</td>
-                <td>x${(b.multiplier || 0).toFixed(2)}</td>
+                <td>x${esc((b.multiplier || 0).toFixed(2))}</td>
             </tr>`
         ).join('');
     }
