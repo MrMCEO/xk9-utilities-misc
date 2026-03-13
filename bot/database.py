@@ -270,6 +270,9 @@ def update_donate_balance_checked(telegram_id: int, amount: int) -> tuple[bool, 
 
     Используется в handle_webapp_data при wallet='donate'.
     """
+    if amount <= 0:
+        return False, get_donate_balance(telegram_id)
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
