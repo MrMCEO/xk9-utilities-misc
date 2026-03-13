@@ -1757,14 +1757,51 @@ if (tg.onEvent) {
     } catch(e) {}
 })();
 
-function sendResult(game, stake, won, winnings, profit, mult) {
+/* URL бота для HTTP API (передаётся ботом как ?api=...) */
+const botApiUrl = urlParams.get('api') || '';
+
+/* Отправить результат игры через HTTP API (работает из любого источника) */
+async function sendResultViaApi(game, stake, won, winnings, profit, mult) {
+    if (!botApiUrl || !tg?.initData) return false;
     try {
-        tg.sendData && tg.sendData(JSON.stringify({
-            type:'game_result', game, stake, won,
-            winnings, profit, multiplier:mult, user:tgUser,
-            wallet: activeWallet
-        }));
-    } catch(e) {}
+        const resp = await fetch(`${botApiUrl}/api/game`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                initData: tg.initData,
+                type: 'game_result',
+                game, stake, won, winnings, profit,
+                multiplier: mult,
+                wallet: activeWallet
+            })
+        });
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        /* Синхронизируем баланс с сервером если есть расхождение */
+        if (data.balance !== undefined && data.balance !== balance) {
+            const diff = data.balance - balance;
+            balance = data.balance;
+            try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
+            if (diff !== 0) animateCounter(balEl, balance - diff, balance, 500, fmtShort);
+            else balEl.textContent = fmtShort(balance);
+        }
+        return true;
+    } catch(e) { return false; }
+}
+
+function sendResult(game, stake, won, winnings, profit, mult) {
+    /* Приоритет: HTTP API (работает из меню-кнопки и любого источника) */
+    sendResultViaApi(game, stake, won, winnings, profit, mult);
+    /* Fallback: sendData (работает только из reply-кнопки клавиатуры, закрывает приложение) */
+    if (!botApiUrl) {
+        try {
+            tg.sendData && tg.sendData(JSON.stringify({
+                type: 'game_result', game, stake, won,
+                winnings, profit, multiplier: mult, user: tgUser,
+                wallet: activeWallet
+            }));
+        } catch(e) {}
+    }
 }
 
 /* ════════════════════════════════════

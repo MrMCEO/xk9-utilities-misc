@@ -4,6 +4,10 @@ import random
 import html
 import asyncio
 import base64
+import hmac
+import hashlib
+import urllib.parse
+from aiohttp import web as aio_web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -21,7 +25,7 @@ from aiogram.types import (
 from aiogram.client.default import DefaultBotProperties
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
-from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH, COINS_PER_STAR
+from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH, COINS_PER_STAR, BOT_API_URL, BOT_API_PORT
 from database import (
     init_db,
     get_or_create_user,
@@ -128,6 +132,118 @@ async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) 
     )
 
 
+# === HTTP API для Web App ===
+
+def verify_init_data(init_data: str) -> dict | None:
+    """Верифицирует Telegram initData через HMAC-SHA256. Возвращает dict с user или None."""
+    try:
+        params = dict(p.split('=', 1) for p in init_data.split('&') if '=' in p)
+        hash_value = params.pop('hash', '')
+        data_check_string = '\n'.join(f'{k}={v}' for k, v in sorted(params.items()))
+        secret_key = hmac.new(b'WebAppData', BOT_TOKEN.encode(), hashlib.sha256).digest()
+        expected = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(hash_value, expected):
+            return None
+        user_json = urllib.parse.unquote(params.get('user', '{}'))
+        return json.loads(user_json)
+    except Exception:
+        return None
+
+
+async def process_game_result(telegram_id: int, data: dict) -> dict:
+    """Обрабатывает результат игры из Web App. Возвращает {'ok': bool, 'balance': int, 'error': str}."""
+    if is_user_banned(telegram_id):
+        return {'ok': False, 'error': 'banned'}
+    if get_maintenance() and telegram_id not in ADMIN_IDS:
+        return {'ok': False, 'error': 'maintenance'}
+
+    game_type = data.get('game', 'rocket')
+    if game_type not in VALID_GAME_TYPES:
+        game_type = 'rocket'
+
+    try:
+        stake = float(data.get('stake', 0))
+        multiplier = float(data.get('multiplier', 1.0))
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'invalid_params'}
+
+    won = bool(data.get('won', False))
+
+    if stake <= 0 or stake > MAX_STAKE:
+        return {'ok': False, 'error': 'invalid_stake'}
+    if multiplier <= 0 or multiplier > MAX_MULTIPLIER:
+        return {'ok': False, 'error': 'invalid_multiplier'}
+
+    wallet = data.get('wallet', 'main')
+    use_donate = wallet == 'donate'
+
+    if use_donate:
+        success, balance_after = update_donate_balance_checked(telegram_id, int(stake))
+    else:
+        success, balance_after = update_balance_checked(telegram_id, -stake)
+
+    if not success:
+        return {'ok': False, 'error': 'insufficient_funds', 'balance': balance_after}
+
+    winnings = round(stake * multiplier, 2) if won else 0.0
+    if winnings > 0:
+        if use_donate:
+            update_donate_balance(telegram_id, int(winnings))
+        else:
+            update_balance(telegram_id, winnings)
+            balance_after = int(balance_after + winnings)
+
+    add_game(
+        telegram_id=telegram_id,
+        game_type=game_type,
+        stake=stake,
+        result='win' if won else 'lose',
+        winnings=winnings,
+        multiplier=multiplier
+    )
+
+    return {'ok': True, 'balance': int(balance_after)}
+
+
+_CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+
+async def handle_game_api(request: aio_web.Request) -> aio_web.Response:
+    """POST /api/game — принимает результат игры из Web App, проверяет initData, обновляет БД."""
+    if request.method == 'OPTIONS':
+        return aio_web.Response(headers=_CORS_HEADERS)
+    try:
+        body = await request.json()
+        user_info = verify_init_data(body.get('initData', ''))
+        if not user_info:
+            return aio_web.json_response({'ok': False, 'error': 'unauthorized'}, status=401, headers=_CORS_HEADERS)
+
+        result = await process_game_result(user_info['id'], body)
+        status = 200 if result['ok'] else 400
+        return aio_web.json_response(result, status=status, headers=_CORS_HEADERS)
+    except Exception as e:
+        logger.error(f"Game API error: {e}")
+        return aio_web.json_response({'ok': False, 'error': 'internal'}, status=500, headers=_CORS_HEADERS)
+
+
+async def start_api_server() -> None:
+    """Запустить aiohttp HTTP сервер для приёма результатов игр из Web App."""
+    if not BOT_API_URL:
+        return
+    app = aio_web.Application()
+    app.router.add_route('POST', '/api/game', handle_game_api)
+    app.router.add_route('OPTIONS', '/api/game', handle_game_api)
+    runner = aio_web.AppRunner(app)
+    await runner.setup()
+    site = aio_web.TCPSite(runner, '0.0.0.0', BOT_API_PORT)
+    await site.start()
+    logger.info(f"🌐 Game API запущен на порту {BOT_API_PORT}")
+
+
 # === Клавиатуры ===
 
 def _build_admin_data() -> str:
@@ -180,6 +296,8 @@ def get_main_keyboard(balance: float = 0, donate_balance: int = 0, is_admin: boo
     """Основная клавиатура с кнопкой Web App"""
     builder = ReplyKeyboardBuilder()
     url = f"{WEB_APP_URL}?b={balance}&db={donate_balance}"
+    if BOT_API_URL:
+        url += f"&api={BOT_API_URL}"
     if is_admin:
         url += f"&admin=1&admindata={_build_admin_data()}"
     builder.button(text="🎮 Запустить приложение", web_app=WebAppInfo(url=url))
@@ -243,6 +361,8 @@ async def cmd_start(message: Message, command: CommandObject):
     # Устанавливаем персональную кнопку меню (нижняя кнопка Telegram) с уникальным URL,
     # содержащим текущий баланс пользователя (query-параметры b и db)
     menu_url = f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}"
+    if BOT_API_URL:
+        menu_url += f"&api={BOT_API_URL}"
     if is_admin:
         menu_url += f"&admin=1&admindata={_build_admin_data()}"
     try:
@@ -270,6 +390,8 @@ async def cmd_play(message: Message):
     """Команда /play - открыть игру"""
     u = get_user(message.from_user.id) or {}
     play_url = f"{WEB_APP_URL}?b={u.get('balance', 0)}&db={u.get('donate_balance', 0)}"
+    if BOT_API_URL:
+        play_url += f"&api={BOT_API_URL}"
     await message.answer(
         "🎮 <b>BFG Casino — Web App</b>\n\n"
         "🚀 Ракета · 💣 Сапер\n"
@@ -1478,6 +1600,7 @@ async def on_startup():
     """При запуске бота"""
     logger.info("✅ Бот запущен!")
     logger.info(f"💾 База данных: {DB_PATH}")
+    await start_api_server()
     
     await bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
