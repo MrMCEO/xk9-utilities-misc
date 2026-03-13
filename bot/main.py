@@ -6,6 +6,7 @@ import asyncio
 import base64
 import hmac
 import hashlib
+import time
 import urllib.parse
 from aiohttp import web as aio_web
 from aiogram import Bot, Dispatcher, F
@@ -134,15 +135,26 @@ async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) 
 
 # === HTTP API для Web App ===
 
+INIT_DATA_MAX_AGE = 300  # секунд (5 минут) — защита от replay-атак
+
 def verify_init_data(init_data: str) -> dict | None:
     """Верифицирует Telegram initData через HMAC-SHA256. Возвращает dict с user или None."""
     try:
+        if not init_data:
+            return None
         params = dict(p.split('=', 1) for p in init_data.split('&') if '=' in p)
         hash_value = params.pop('hash', '')
+        if not hash_value:
+            return None
         data_check_string = '\n'.join(f'{k}={v}' for k, v in sorted(params.items()))
         secret_key = hmac.new(b'WebAppData', BOT_TOKEN.encode(), hashlib.sha256).digest()
         expected = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(hash_value, expected):
+            return None
+        # Проверка auth_date — защита от replay-атак (initData старше 5 минут отклоняется)
+        auth_date = int(params.get('auth_date', '0'))
+        if abs(time.time() - auth_date) > INIT_DATA_MAX_AGE:
+            logger.warning(f"initData expired: auth_date={auth_date}, now={int(time.time())}")
             return None
         user_json = urllib.parse.unquote(params.get('user', '{}'))
         return json.loads(user_json)
@@ -189,6 +201,7 @@ async def process_game_result(telegram_id: int, data: dict) -> dict:
     if winnings > 0:
         if use_donate:
             update_donate_balance(telegram_id, int(winnings))
+            balance_after = int(balance_after + winnings)
         else:
             update_balance(telegram_id, winnings)
             balance_after = int(balance_after + winnings)
@@ -205,8 +218,16 @@ async def process_game_result(telegram_id: int, data: dict) -> dict:
     return {'ok': True, 'balance': int(balance_after)}
 
 
+def _get_cors_origin() -> str:
+    """Вычисляет допустимый CORS origin из WEB_APP_URL. Если не задан — fallback на *."""
+    if WEB_APP_URL and WEB_APP_URL != "https://your-domain.com/app/index.html":
+        from urllib.parse import urlparse
+        parsed = urlparse(WEB_APP_URL)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return '*'
+
 _CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': _get_cors_origin(),
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
@@ -1048,6 +1069,8 @@ async def handle_broadcast_text(message: Message, state: FSMContext):
     await message.answer(f"📢 Начинаю рассылку для {len(users)} пользователей...")
 
     for user in users:
+        if user.get("is_banned"):
+            continue
         try:
             await bot.send_message(user["telegram_id"], text, parse_mode="HTML")
             sent += 1
