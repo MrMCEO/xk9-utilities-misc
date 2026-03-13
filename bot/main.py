@@ -413,6 +413,8 @@ async def cmd_play(message: Message):
     play_url = f"{WEB_APP_URL}?b={u.get('balance', 0)}&db={u.get('donate_balance', 0)}"
     if BOT_API_URL:
         play_url += f"&api={BOT_API_URL}"
+    if message.from_user.id in ADMIN_IDS:
+        play_url += f"&admin=1&admindata={_build_admin_data()}"
     await message.answer(
         "🎮 <b>BFG Casino — Web App</b>\n\n"
         "🚀 Ракета · 💣 Сапер\n"
