@@ -1310,6 +1310,21 @@ if (tg.onEvent) {
     /* Бот может прислать donateBalance через sendData — слушаем через события */
 }
 
+/* Инициализация основного баланса из URL-параметра ?b=N (передаётся ботом) */
+(function initBalanceFromTg() {
+    try {
+        const urlB = new URLSearchParams(window.location.search).get('b');
+        if (urlB !== null) {
+            const val = parseFloat(urlB);
+            if (!isNaN(val) && val >= 0) {
+                balance = val;
+                try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
+                balEl.textContent = fmtShort(balance);
+            }
+        }
+    } catch(e) {}
+})();
+
 /* Инициализация донатного баланса из URL-параметра ?db=N (передаётся ботом) */
 (function initDonateFromTg() {
     try {
