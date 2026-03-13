@@ -1287,6 +1287,7 @@ function applyRipples() {
 /* ════════════════════════════════════
    TELEGRAM
 ════════════════════════════════════ */
+const BOT_USERNAME = 'BFGCasinoBot';
 const tg     = window.Telegram?.WebApp || {};
 const tgUser = tg.initDataUnsafe?.user || {};
 if (tg.ready) { tg.ready(); tg.expand(); }
@@ -2464,7 +2465,7 @@ function openDeposit() {
        В браузере tg.initDataUnsafe.user отсутствует — показываем заглушку
        вместо настоящего модала, чтобы исключить бесплатное зачисление через fallback. */
     if (!tg.initDataUnsafe?.user) {
-        openModal('ℹ️', 'Только в Telegram', 'Откройте приложение через бота @BFGCasinoBot', '', null);
+        openModal('ℹ️', 'Только в Telegram', 'Откройте приложение через бота @' + BOT_USERNAME, '', null);
         return;
     }
     haptic('light');
