@@ -147,6 +147,22 @@ body>* { position:relative; z-index:1; }
 }
 .theme-btn:active { transform:scale(0.84) rotate(25deg); }
 
+.deposit-btn {
+    height:32px;
+    padding:0 12px;
+    border-radius:20px;
+    border:1.5px solid var(--gold);
+    background:var(--gold-lo);
+    cursor:pointer;
+    display:flex; align-items:center; gap:5px;
+    font-size:13px; font-weight:800;
+    color:var(--gold);
+    letter-spacing:.3px;
+    transition:var(--tr), transform .15s;
+    white-space:nowrap;
+}
+.deposit-btn:active { transform:scale(0.90); }
+
 /* ═══════════════════════════════════════════════════
    TABS
 ═══════════════════════════════════════════════════ */
@@ -887,7 +903,7 @@ main { flex:1; overflow:hidden; position:relative; }
             <div class="bal-label">Баланс</div>
             <div class="bal-val" id="balVal">$1 000 000</div>
         </div>
-        <button class="theme-btn" id="depositBtn" title="Пополнить баланс" style="color:var(--brand);border-color:var(--brand-hi);font-size:18px;">+</button>
+        <button class="deposit-btn" id="depositBtn" title="Пополнить баланс">+ Пополнить</button>
         <button class="theme-btn" id="themeBtn">🌙</button>
     </div>
 </header>
@@ -2092,11 +2108,20 @@ const depositInput   = document.getElementById('depositAmtInput');
 const depositManual  = document.getElementById('depositManualBtn');
 
 function openDeposit() {
-    depositContent.style.display = 'block';
-    depositSuccess.classList.remove('show');
-    depositInput.value = '';
-    depositModal.classList.add('open');
     haptic('light');
+    const isTelegram = window.Telegram && window.Telegram.WebApp && tg.initData;
+    if (!isTelegram) {
+        /* Opened in browser, not Telegram */
+        alert('Откройте приложение в Telegram для пополнения баланса');
+        return;
+    }
+    const botUsername = tg.initDataUnsafe?.bot?.username;
+    if (botUsername && tg.openTelegramLink) {
+        tg.openTelegramLink('https://t.me/' + botUsername + '?start=donate');
+    } else if (tg.close) {
+        /* Fallback — just close the WebApp so user returns to the bot */
+        tg.close();
+    }
 }
 
 function closeDeposit() {
