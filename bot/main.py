@@ -2,7 +2,9 @@ import logging
 import json
 import random
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     Message,
     CallbackQuery,
@@ -40,6 +42,12 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+
+# === FSM состояния ===
+
+class DonateStates(StatesGroup):
+    waiting_for_custom_amount = State()
+
 # Инициализация БД при старте
 init_db()
 
@@ -72,14 +80,25 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
 # === Команды ===
 
 @dp.message(Command("start"))
-async def cmd_start(message: Message):
-    """Команда /start - приветствие и авторизация"""
+async def cmd_start(message: Message, command: CommandObject):
+    """Команда /start - приветствие и авторизация. Поддерживает deep link ?start=donate"""
     user = get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
         last_name=message.from_user.last_name
     )
+
+    # Обработка deep link /start donate
+    if command.args == "donate":
+        await message.answer(
+            "⭐ <b>Пополнение баланса</b>\n\n"
+            f"1 звезда = {COINS_PER_STAR:,} монет\n\n"
+            "Выберите сумму пополнения:",
+            reply_markup=get_donate_keyboard(),
+            parse_mode='HTML'
+        )
+        return
 
     await message.answer(
         f"🎰 <b>Добро пожаловать в BFG Casino!</b>\n\n"
@@ -460,20 +479,64 @@ def get_donate_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for amount_stars, label in DONATE_OPTIONS:
         builder.button(text=label, callback_data=f"donate_{amount_stars}")
+    builder.button(text="✏️ Своя сумма", callback_data="donate_custom")
     builder.adjust(1)
     return builder.as_markup()
 
 
 @dp.message(Command("donate"))
 @dp.message(F.text == "💳 Пополнить")
-async def cmd_donate(message: Message):
+async def cmd_donate(message: Message, state: FSMContext):
     """Показать меню пополнения баланса через Telegram Stars"""
+    await state.clear()
     await message.answer(
         "⭐ <b>Пополнение баланса</b>\n\n"
         f"1 звезда = {COINS_PER_STAR:,} монет\n\n"
         "Выберите сумму пополнения:",
         reply_markup=get_donate_keyboard(),
         parse_mode='HTML'
+    )
+
+
+@dp.callback_query(F.data == "donate_custom")
+async def cb_donate_custom(callback_query: CallbackQuery, state: FSMContext):
+    """Запросить произвольную сумму звёзд"""
+    await state.set_state(DonateStates.waiting_for_custom_amount)
+    await callback_query.message.answer(
+        "✏️ <b>Произвольная сумма</b>\n\n"
+        "Введите количество звёзд (минимум 1, максимум 2500):",
+        parse_mode='HTML'
+    )
+    await callback_query.answer()
+
+
+@dp.message(DonateStates.waiting_for_custom_amount)
+async def handle_custom_amount(message: Message, state: FSMContext):
+    """Обработать введённую пользователем произвольную сумму звёзд"""
+    text = message.text.strip() if message.text else ""
+
+    if not text.isdigit():
+        await message.answer("❌ Введите целое число. Попробуйте ещё раз:")
+        return
+
+    amount_stars = int(text)
+
+    if amount_stars < 1 or amount_stars > 2500:
+        await message.answer("❌ Сумма должна быть от 1 до 2500 звёзд. Попробуйте ещё раз:")
+        return
+
+    await state.clear()
+
+    coins = amount_stars * COINS_PER_STAR
+
+    await message.answer_invoice(
+        title="Пополнение BFG Casino",
+        description=f"Зачислит {coins:,} монет на ваш игровой баланс",
+        payload=f"donate_{amount_stars}_{message.from_user.id}",
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{coins:,} монет", amount=amount_stars)],
+        start_parameter="donate",
     )
 
 
