@@ -166,9 +166,18 @@ def update_balance(telegram_id: int, amount: float) -> float:
 
 def update_balance_checked(telegram_id: int, amount: float) -> tuple[bool, float]:
     """
-    Обновить баланс с проверкой достаточности средств (для казино).
-    Возвращает (success, new_balance).
-    Если средств не хватает — не изменяет баланс.
+    Атомарное изменение основного баланса с проверкой достаточности средств (для казино и Web App).
+
+    Параметры:
+    - telegram_id: ID пользователя
+    - amount: изменение баланса (amount < 0 — списание, amount > 0 — пополнение)
+
+    Возвращает: (success, new_balance)
+    - success=True: операция выполнена, new_balance — новый баланс
+    - success=False: недостаточно средств, баланс не изменился, new_balance — текущий баланс
+
+    Это двухфазный коммит: UPDATE с WHERE условием гарантирует, что списание произойдёт только если
+    баланс достаточен. Используется для защиты от овердрафта в cmd_casino и handle_webapp_data.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -267,9 +276,17 @@ def update_donate_balance(telegram_id: int, delta: int) -> int:
 
 def update_donate_balance_checked(telegram_id: int, amount: int) -> tuple[bool, int]:
     """
-    Атомарное списание с донатного баланса с проверкой достаточности средств.
-    amount — сумма для списания (положительное число).
-    Возвращает (success, new_balance).
+    Атомарное списание с донатного баланса с проверкой достаточности средств (для Web App).
+
+    Параметры:
+    - telegram_id: ID пользователя
+    - amount: сумма для списания (положительное число, целое)
+
+    Возвращает: (success, new_balance)
+    - success=True: баланс хватил, деньги списаны, new_balance — новый донатный баланс
+    - success=False: баланс не хватил, списания не было, new_balance — текущий баланс
+
+    Используется в handle_webapp_data при wallet='donate'.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -405,8 +422,28 @@ def add_donation(
     amount_rub: int,
     coins_credited: int,
 ) -> int:
-    """Записать успешное пополнение и зачислить монеты на donate_balance (одна транзакция).
-    При ошибке — откатывает обе операции, чтобы монеты не потерялись."""
+    """
+    Записать успешное пополнение через Telegram Stars и зачислить монеты на donate_balance (одна транзакция).
+
+    Логика:
+    1. INSERT в таблицу donations (с UNIQUE constraint на telegram_payment_charge_id — защита от дублей)
+    2. UPDATE donate_balance пользователя на сумму coins_credited
+    3. RETURNING новый баланс
+
+    При любой ошибке (включая UNIQUE constraint violation) — откатывает обе операции (ROLLBACK),
+    чтобы монеты не потерялись и не было несогласованности в БД.
+
+    Параметры:
+    - telegram_id: ID пользователя
+    - telegram_payment_charge_id: уникальный ID платежа от Telegram (защита от дублей)
+    - provider_payment_charge_id: ID платежа у провайдера
+    - amount_rub: количество звёзд (переиспользуем как 'сумма в звёздах')
+    - coins_credited: количество игровых монет для зачисления
+
+    Возвращает: новый донатный баланс пользователя
+
+    Вызывается из handle_successful_payment (main.py) при успешном платеже через Telegram Stars.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
