@@ -10,7 +10,7 @@ import time
 import urllib.parse
 from aiohttp import web as aio_web
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandObject
+from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -947,7 +947,7 @@ async def cb_admin_balance(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
 
 
-@dp.message(AdminStates.waiting_for_user_id)
+@dp.message(StateFilter(AdminStates.waiting_for_user_id))
 async def handle_admin_user_id(message: Message, state: FSMContext):
     """Обработать ввод ID/username для изменения баланса"""
     if message.from_user.id not in ADMIN_IDS:
@@ -976,9 +976,10 @@ async def handle_admin_user_id(message: Message, state: FSMContext):
     )
 
 
-@dp.message(AdminStates.waiting_for_amount)
+@dp.message(StateFilter(AdminStates.waiting_for_amount))
 async def handle_admin_amount(message: Message, state: FSMContext):
     """Обработать ввод суммы для установки баланса"""
+    logger.info(f"handle_admin_amount triggered: user={message.from_user.id}, text={message.text!r}")
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
@@ -1050,7 +1051,7 @@ async def cb_admin_broadcast(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
 
 
-@dp.message(AdminStates.waiting_for_broadcast_text)
+@dp.message(StateFilter(AdminStates.waiting_for_broadcast_text))
 async def handle_broadcast_text(message: Message, state: FSMContext):
     """Подтверждение и отправка рассылки"""
     if message.from_user.id not in ADMIN_IDS:
@@ -1134,7 +1135,7 @@ async def cb_admin_create_promo(callback_query: CallbackQuery, state: FSMContext
     await callback_query.answer()
 
 
-@dp.message(AdminStates.waiting_for_promo_code)
+@dp.message(StateFilter(AdminStates.waiting_for_promo_code))
 async def handle_promo_code_input(message: Message, state: FSMContext):
     """Обработать ввод кода промо"""
     if message.from_user.id not in ADMIN_IDS:
@@ -1151,7 +1152,7 @@ async def handle_promo_code_input(message: Message, state: FSMContext):
     await message.answer(f"Код: <code>{code}</code>\n\nВведите бонус (количество монет):")
 
 
-@dp.message(AdminStates.waiting_for_promo_bonus)
+@dp.message(StateFilter(AdminStates.waiting_for_promo_bonus))
 async def handle_promo_bonus_input(message: Message, state: FSMContext):
     """Обработать ввод бонуса промо"""
     if message.from_user.id not in ADMIN_IDS:
@@ -1173,7 +1174,7 @@ async def handle_promo_bonus_input(message: Message, state: FSMContext):
     await message.answer(f"Бонус: <b>{bonus:,} монет</b>\n\nВведите максимальное количество использований:")
 
 
-@dp.message(AdminStates.waiting_for_promo_max_uses)
+@dp.message(StateFilter(AdminStates.waiting_for_promo_max_uses))
 async def handle_promo_max_uses_input(message: Message, state: FSMContext):
     """Обработать ввод макс. использований и создать промо"""
     if message.from_user.id not in ADMIN_IDS:
