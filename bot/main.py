@@ -114,6 +114,13 @@ async def cmd_start(message: Message, command: CommandObject):
         return
 
     donate_bal = get_donate_balance(message.from_user.id)
+    await bot.set_chat_menu_button(
+        chat_id=message.from_user.id,
+        menu_button=MenuButtonWebApp(
+            text="🎮 Играть",
+            web_app=WebAppInfo(url=f"{WEB_APP_URL}?b={user['balance']}&db={donate_bal}")
+        )
+    )
     await message.answer(
         f"🎰 <b>Добро пожаловать в BFG Casino!</b>\n\n"
         f"👤 {message.from_user.first_name}, ваш баланс: <b>${user['balance']:,.2f}</b>\n\n"
