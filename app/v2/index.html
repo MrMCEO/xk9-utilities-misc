@@ -1984,7 +1984,7 @@ function rCashout() {
     R.els.btn.textContent='Сделать ставку'; R.els.btn.className='btn btn-brand';
     R.els.mult.className='mult-display';
     R.els.hint.textContent='✅ Забрали '+fmtFull(total);
-    setTimeout(()=>openModal('🎉','Победа!','Множитель x'+R.mult.toFixed(2),'+'+fmtFull(profit),true),200);
+    setTimeout(()=>{ openModal('🎉','Победа!','Множитель x'+R.mult.toFixed(2),'+'+fmtFull(profit),true); autoCloseTimer=setTimeout(closeModal,1500); },200);
 }
 
 function rCrash() {
@@ -2161,6 +2161,7 @@ function mCashout() {
     pushHistory(mHistData,'mHistory',true,'💎 x'+Mine.mult.toFixed(2));
     sndWin();
     openModal('💎','Выигрыш!','x'+Mine.mult.toFixed(2)+' · Открыто: '+Mine.safe.size,'+'+fmtFull(profit),true);
+    autoCloseTimer=setTimeout(closeModal,1500);
     mResetUI();
 }
 
@@ -2459,6 +2460,7 @@ function ldWin(topReached) {
     pushHistory(lHistData,'lHistory',true,'🎉 x'+LD.mult.toFixed(2));
     sndWin();
     openModal('🎉', 'Победа!', sub, '+' + fmtFull(profit), true);
+    autoCloseTimer = setTimeout(closeModal, 1500);
     ldResetUI();
 }
 
