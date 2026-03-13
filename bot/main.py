@@ -23,6 +23,7 @@ from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_BALANCE, WEB_APP_URL, DB_PATH, 
 from database import (
     init_db,
     get_or_create_user,
+    get_user,
     get_user_balance,
     update_balance,
     update_balance_checked,
@@ -35,7 +36,6 @@ from database import (
     add_donation,
     get_user_donations,
     get_donate_balance,
-    add_donate_balance,
     update_donate_balance,
     update_donate_balance_checked,
     get_global_stats,
@@ -58,6 +58,27 @@ class DonateStates(StatesGroup):
 
 # Инициализация БД при старте
 init_db()
+
+
+# === Вспомогательные функции ===
+
+def fmt_name(user: dict) -> str:
+    """Экранировать имя пользователя для HTML-сообщений."""
+    return html.escape(user.get("first_name") or user.get("username") or "Unknown")
+
+
+async def send_donate_invoice(target: Message, user_id: int, amount_stars: int) -> None:
+    """Отправить инвойс Telegram Stars для пополнения баланса."""
+    coins = amount_stars * COINS_PER_STAR
+    await target.answer_invoice(
+        title="Пополнение BFG Casino",
+        description=f"Зачислит {coins:,} монет на ваш игровой баланс",
+        payload=f"donate_{amount_stars}_{user_id}",
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(label=f"{coins:,} монет", amount=amount_stars)],
+        start_parameter="donate",
+    )
 
 
 # === Клавиатуры ===
@@ -143,12 +164,14 @@ async def cmd_start(message: Message, command: CommandObject):
 @dp.message(Command("game"))
 async def cmd_play(message: Message):
     """Команда /play - открыть игру"""
+    u = get_user(message.from_user.id) or {}
+    play_url = f"{WEB_APP_URL}?b={u.get('balance', 0)}&db={u.get('donate_balance', 0)}"
     await message.answer(
         "🎮 <b>BFG Casino — Web App</b>\n\n"
         "🚀 Ракета · 💣 Сапер\n"
         "Выбирай игру и испытай удачу!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=f"{WEB_APP_URL}?b={get_user_balance(message.from_user.id)}&db={get_donate_balance(message.from_user.id)}"))]
+            [InlineKeyboardButton(text="🎮 Открыть приложение", web_app=WebAppInfo(url=play_url))]
         ])
     )
 
@@ -606,8 +629,7 @@ async def cmd_stats(message: Message):
 
     top = ""
     for i, p in enumerate(s["top_players"], 1):
-        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
-        top += f"  {i}. {name} — {p['game_count']} игр\n"
+        top += f"  {i}. {fmt_name(p)} — {p['game_count']} игр\n"
     if not top:
         top = "  нет данных\n"
 
@@ -629,15 +651,13 @@ async def cmd_leaderboard(message: Message):
 
     balance_lines = ""
     for i, p in enumerate(lb["top_balance"], 1):
-        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
-        balance_lines += f"  {i}. {name} — <b>${p['balance']:,.0f}</b>\n"
+        balance_lines += f"  {i}. {fmt_name(p)} — <b>${p['balance']:,.0f}</b>\n"
     if not balance_lines:
         balance_lines = "  нет данных\n"
 
     games_lines = ""
     for i, p in enumerate(lb["top_games"], 1):
-        name = html.escape(p.get("first_name") or p.get("username") or "Unknown")
-        games_lines += f"  {i}. {name} — <b>{p['game_count']} игр</b>\n"
+        games_lines += f"  {i}. {fmt_name(p)} — <b>{p['game_count']} игр</b>\n"
     if not games_lines:
         games_lines = "  нет данных\n"
 
@@ -739,17 +759,7 @@ async def handle_custom_amount(message: Message, state: FSMContext):
 
     await state.clear()
 
-    coins = amount_stars * COINS_PER_STAR
-
-    await message.answer_invoice(
-        title="Пополнение BFG Casino",
-        description=f"Зачислит {coins:,} монет на ваш игровой баланс",
-        payload=f"donate_{amount_stars}_{message.from_user.id}",
-        provider_token="",
-        currency="XTR",
-        prices=[LabeledPrice(label=f"{coins:,} монет", amount=amount_stars)],
-        start_parameter="donate",
-    )
+    await send_donate_invoice(message, message.from_user.id, amount_stars)
 
 
 @dp.callback_query(F.data.startswith("donate_"))
@@ -773,17 +783,7 @@ async def cb_donate_amount(callback_query: CallbackQuery):
         await callback_query.answer("Неверная сумма", show_alert=True)
         return
 
-    coins = amount_stars * COINS_PER_STAR
-
-    await callback_query.message.answer_invoice(
-        title="Пополнение BFG Casino",
-        description=f"Зачислит {coins:,} монет на ваш игровой баланс",
-        payload=f"donate_{amount_stars}_{callback_query.from_user.id}",
-        provider_token="",
-        currency="XTR",
-        prices=[LabeledPrice(label=f"{coins:,} монет", amount=amount_stars)],
-        start_parameter="donate",
-    )
+    await send_donate_invoice(callback_query.message, callback_query.from_user.id, amount_stars)
     await callback_query.answer()
 
 
