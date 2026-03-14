@@ -1185,6 +1185,89 @@ main { flex:1; overflow:hidden; position:relative; }
     color:var(--muted); margin:12px 0 8px;
 }
 
+/* ═══════════════════════════════════════════════════
+   CRASH MULTIPLAYER
+═══════════════════════════════════════════════════ */
+.crash-timer-bar {
+    position:relative;
+    height:28px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    margin-bottom:8px;
+    overflow:hidden;
+    transition:var(--tr);
+}
+.crash-timer-fill {
+    position:absolute; top:0; left:0; bottom:0;
+    background:linear-gradient(90deg, var(--brand), var(--brand2));
+    border-radius:14px;
+    width:100%;
+    transition:width 1s linear;
+}
+.crash-timer-text {
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:800; color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.4);
+    z-index:1;
+}
+.crash-info-row {
+    display:flex; align-items:center;
+    justify-content:space-between;
+    gap:8px; margin-bottom:8px; padding:0 2px;
+}
+.crash-online, .crash-round, .crash-hash {
+    font-size:11px; font-weight:600;
+    color:var(--muted); transition:var(--tr);
+}
+.crash-hash { cursor:pointer; }
+.crash-hash:active { color:var(--brand); }
+.crash-feed {
+    max-height:200px; overflow-y:auto;
+    scrollbar-width:thin;
+}
+.crash-feed::-webkit-scrollbar { width:2px; }
+.crash-feed::-webkit-scrollbar-thumb { background:var(--brand-lo); border-radius:2px; }
+.crash-feed-empty {
+    text-align:center; color:var(--muted);
+    font-size:12px; padding:12px;
+}
+.feed-item {
+    display:flex; align-items:center;
+    gap:8px; padding:5px 0;
+    border-bottom:1px solid var(--border);
+    font-size:12px; transition:var(--tr);
+}
+.feed-item:last-child { border-bottom:none; }
+.feed-name {
+    font-weight:700; color:var(--text);
+    flex:1; min-width:0; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;
+}
+.feed-amount { color:var(--gold); font-weight:700; white-space:nowrap; }
+.feed-result { font-weight:800; white-space:nowrap; }
+.feed-result.won { color:var(--green); }
+.feed-result.lost { color:var(--red); }
+.feed-result.pending { color:var(--muted); }
+.crash-chat {
+    max-height:120px; overflow-y:auto;
+    margin-bottom:6px; scrollbar-width:thin;
+}
+.crash-chat::-webkit-scrollbar { width:2px; }
+.crash-chat::-webkit-scrollbar-thumb { background:var(--brand-lo); border-radius:2px; }
+.chat-msg {
+    font-size:12px; padding:2px 0;
+    color:var(--text); word-break:break-word;
+}
+.chat-msg .chat-name {
+    font-weight:700; color:var(--brand); margin-right:5px;
+}
+.crash-chat-input-row {
+    display:flex; gap:5px; align-items:stretch;
+}
+.crash-chat-input-row .bet-input { flex:1; }
+
     </style>
 </head>
 <body>
@@ -1214,6 +1297,7 @@ main { flex:1; overflow:hidden; position:relative; }
     <button class="tab-btn active" data-tab="rocket"><span class="ti">🚀</span> Ракета</button>
     <button class="tab-btn"        data-tab="mine">  <span class="ti">💣</span> Сапер</button>
     <button class="tab-btn"        data-tab="ladder"><span class="ti">🪜</span> Лесенка</button>
+    <button class="tab-btn"        data-tab="crash"> <span class="ti">💥</span> Краш</button>
 </div>
 
 <main>
@@ -1391,6 +1475,71 @@ main { flex:1; overflow:hidden; position:relative; }
     <!-- In-game panel -->
     <div id="lGamePanel" style="display:none">
         <button class="btn btn-green" id="lCashoutBtn" disabled>💎 Забрать выигрыш</button>
+    </div>
+
+</section>
+
+<!-- ══════════ CRASH MULTIPLAYER ══════════ -->
+<section id="screenCrash" class="screen">
+
+    <div class="history-strip" id="cHistory"></div>
+
+    <div class="game-stage">
+        <canvas id="cCanvas"></canvas>
+        <div class="stage-info">
+            <div class="mult-display" id="cMult">x1.00</div>
+            <div class="game-hint" id="cHint">Подключение...</div>
+        </div>
+        <div class="rocket-emoji" id="cRocket">🚀</div>
+    </div>
+
+    <div class="crash-timer-bar" id="cTimerBar" style="display:none">
+        <div class="crash-timer-fill" id="cTimerFill"></div>
+        <span class="crash-timer-text" id="cTimerText">10s</span>
+    </div>
+
+    <div class="crash-info-row">
+        <span class="crash-online" id="cOnline">🟢 0 онлайн</span>
+        <span class="crash-round" id="cRoundId">#0</span>
+        <span class="crash-hash" id="cHashShort" title="Нажми для копирования">🔒 —</span>
+    </div>
+
+    <div class="card" id="cBetCard">
+        <div class="sec-label">Кошелёк</div>
+        <div class="wallet-toggle" id="cWalletToggle">
+            <button class="wt-btn active" data-wallet="main">💰 Основной</button>
+            <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
+        </div>
+        <div class="sec-label">Ставка</div>
+        <input type="number" class="bet-input" id="cBetInput" value="100" min="1">
+        <div class="quick-bets">
+            <button class="qb" data-v="50">50</button>
+            <button class="qb" data-v="100">100</button>
+            <button class="qb" data-v="500">500</button>
+            <button class="qb" data-v="1000">1K</button>
+            <button class="qb" data-v="5000">5K</button>
+            <button class="qb" data-v="10000">10K</button>
+        </div>
+        <div class="sec-label" style="margin-top:8px">Авто-кэшаут (опц.)</div>
+        <input type="number" class="bet-input" id="cAutoCashout" placeholder="Например 2.0" min="1.01" step="0.1" style="font-size:14px; padding:8px 12px">
+    </div>
+
+    <button class="btn btn-brand" id="cActionBtn" disabled>Подключение...</button>
+
+    <div class="card" style="margin-top:10px">
+        <div class="sec-label">Игроки в раунде</div>
+        <div class="crash-feed" id="cFeed">
+            <div class="crash-feed-empty">Пока никого...</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:10px">
+        <div class="sec-label">Чат</div>
+        <div class="crash-chat" id="cChat"></div>
+        <div class="crash-chat-input-row">
+            <input type="text" class="bet-input" id="cChatInput" placeholder="Написать..." maxlength="200" style="font-size:13px; padding:8px 12px; margin-bottom:0">
+            <button class="qb" id="cChatSend" style="padding:8px 12px; font-size:13px">➤</button>
+        </div>
     </div>
 
 </section>
@@ -1940,7 +2089,7 @@ document.getElementById('modal').addEventListener('click', e => {
    NAVIGATION
 ════════════════════════════════════ */
 let curTab = 'rocket';
-const tabMap = { rocket:'screenRocket', mine:'screenMine', ladder:'screenLadder' };
+const tabMap = { rocket:'screenRocket', mine:'screenMine', ladder:'screenLadder', crash:'screenCrash' };
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
@@ -2292,6 +2441,353 @@ document.getElementById('rActionBtn').addEventListener('click', ()=>{
     try { const b = localStorage.getItem('bfg_r_bet'); if (b) R.els.betInput.value = b; } catch(e) {}
     requestAnimationFrame(() => { rSyncCanvasSize(); rDraw(0, false); });
 })();
+
+/* ════════════════════════════════════════════════════════
+   CRASH MULTIPLAYER
+════════════════════════════════════════════════════════ */
+const C = {
+    ws:null, state:'waiting', mult:1.00, roundId:0, roundHash:'',
+    myBet:null, myCashout:null, players:[], history:[],
+    connected:false, animFrame:null, t0:0, bettingDuration:10,
+    els:{
+        mult:     document.getElementById('cMult'),
+        hint:     document.getElementById('cHint'),
+        btn:      document.getElementById('cActionBtn'),
+        betInput: document.getElementById('cBetInput'),
+        histBar:  document.getElementById('cHistory'),
+        canvas:   document.getElementById('cCanvas'),
+        rocket:   document.getElementById('cRocket'),
+        timerBar: document.getElementById('cTimerBar'),
+        timerFill:document.getElementById('cTimerFill'),
+        timerText:document.getElementById('cTimerText'),
+        online:   document.getElementById('cOnline'),
+        roundId:  document.getElementById('cRoundId'),
+        hashShort:document.getElementById('cHashShort'),
+        feed:     document.getElementById('cFeed'),
+        chat:     document.getElementById('cChat'),
+        chatInput:document.getElementById('cChatInput'),
+        chatSend: document.getElementById('cChatSend'),
+        autoCashout:document.getElementById('cAutoCashout'),
+    }
+};
+
+const cCtx = C.els.canvas.getContext('2d',{alpha:false});
+let cCanvasW=0, cCanvasH=0;
+const cStars=[];
+let cStarsReady=false;
+
+function cSyncCanvas(){
+    const cv=C.els.canvas;
+    const w=cv.offsetWidth, h=cv.offsetHeight;
+    if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; cCanvasW=w; cCanvasH=h; cStarsReady=false; }
+}
+function cInitStars(W,H){
+    cStarsReady=true;
+    for(let i=0;i<60;i++) cStars[i]={x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.3+.3,phase:Math.random()*Math.PI*2,spd:Math.random()*.7+.3};
+}
+
+function cDraw(elapsed,crashed){
+    const cv=C.els.canvas;
+    if(cv.width!==cv.offsetWidth||cv.height!==cv.offsetHeight) cSyncCanvas();
+    const W=cCanvasW||cv.offsetWidth, H=cCanvasH||cv.offsetHeight;
+    const cx=cCtx;
+    const isDark=html.getAttribute('data-theme')==='dark';
+    cx.clearRect(0,0,W,H);
+    if(isDark){cx.fillStyle='#05051a';cx.fillRect(0,0,W,H);}
+    if(!cStarsReady||!cStars.length) cInitStars(W,H);
+    const now=Date.now()/1000;
+    const ss=C.state==='running'?Math.min(1.5+(C.mult-1)*.5,10):0;
+    for(const s of cStars){
+        const tw=.15+.4*(.5+.5*Math.sin(now*1.4+s.phase));
+        const op=isDark?tw:tw*.28;
+        cx.beginPath();cx.arc(s.x,s.y,s.r,0,Math.PI*2);
+        cx.fillStyle=isDark?`rgba(200,210,255,${op})`:`rgba(61,90,254,${op})`;cx.fill();
+        if(C.state==='running'&&ss>0){s.y+=s.spd*ss;if(s.y>H+2){s.y=-2;s.x=Math.random()*W;}}
+    }
+    if(elapsed>0){
+        const MX=18,MY=14,Wc=W-MX*2,Hc=H-MY*2;
+        const n=1-1/(1+elapsed/7);
+        const lc=crashed?'rgba(255,68,85,0.85)':'rgba(61,90,254,0.90)';
+        const ft=crashed?'rgba(255,68,85,0.18)':'rgba(61,90,254,0.18)';
+        function cf(f){return .25*f+.75*Math.pow(f,3);}
+        function pt(frac){const f=Math.min(frac,n);return{x:MX+f*Wc,y:MY+Hc-cf(f)*Hc};}
+        const grad=cx.createLinearGradient(0,H,0,MY);grad.addColorStop(0,ft);grad.addColorStop(1,'transparent');
+        const cp2=new Path2D();cp2.moveTo(MX,H-MY);
+        for(let i=0;i<=80;i++){const p=pt(i/80);cp2.lineTo(p.x,p.y);}
+        const tipP=pt(n);
+        const fp=new Path2D(cp2);fp.lineTo(tipP.x,H-MY);fp.closePath();
+        cx.fillStyle=grad;cx.fill(fp);
+        cx.strokeStyle=lc;cx.lineWidth=2;cx.lineJoin='round';cx.stroke(cp2);
+        const tip=pt(n),prev=pt(Math.max(0,n-.04));
+        const dx=tip.x-prev.x,dy=tip.y-prev.y;
+        const ar=Math.atan2(-dy,dx),rd=45-ar*180/Math.PI;
+        const el=C.els.rocket;
+        el.style.left=(tip.x-13)+'px';el.style.top=(tip.y-13)+'px';
+        el.style.transform=`rotate(${rd}deg)`;el.style.display='block';
+        el.style.filter=crashed?'drop-shadow(0 0 10px rgba(255,68,85,.8)) grayscale(.6)':'drop-shadow(0 0 9px rgba(61,90,254,.7))';
+    } else {
+        const el=C.els.rocket;
+        el.style.left='18px';el.style.top=(H-38)+'px';
+        el.style.transform='rotate(0deg)';el.style.display='block';
+        el.style.filter='drop-shadow(0 0 8px rgba(61,90,254,.5))';
+    }
+}
+
+function cCalcMult(t){return 1+t*.1+t*t*.012;}
+function cAnimLoop(){
+    if(C.state!=='running') return;
+    const t=(Date.now()-C.t0)/1000;
+    C.mult=cCalcMult(t);
+    C.els.mult.textContent='x'+C.mult.toFixed(2);
+    cDraw(t,false);
+    C.animFrame=requestAnimationFrame(cAnimLoop);
+}
+function cStopAnim(){if(C.animFrame){cancelAnimationFrame(C.animFrame);C.animFrame=null;}}
+
+function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+/* --- WebSocket --- */
+let crashConnected=false;
+
+function crashConnect(){
+    const wsUrl=urlParams.get('ws')||
+        (location.protocol==='https:'?'wss://':'ws://')+location.hostname+':3001/ws/crash';
+    // Валидация WS URL: запрещать сторонние хосты (защита от фишинга)
+    if(urlParams.get('ws')){
+        try{
+            const u=new URL(wsUrl);
+            if(u.hostname!==location.hostname){
+                C.els.hint.textContent='Недопустимый WS-сервер';
+                return;
+            }
+        }catch(e){
+            C.els.hint.textContent='Ошибка WS URL';
+            return;
+        }
+    }
+    C.els.hint.textContent='Подключение...';
+    C.els.btn.textContent='Подключение...';C.els.btn.disabled=true;
+    try{C.ws=new WebSocket(wsUrl);}catch(e){
+        C.els.hint.textContent='Ошибка подключения';
+        setTimeout(crashConnect,5000);return;
+    }
+    C.ws.onopen=()=>{
+        C.connected=true;
+        C.ws.send(JSON.stringify({type:'auth',initData:tg.initData||''}));
+    };
+    C.ws.onclose=()=>{
+        C.connected=false;cStopAnim();
+        C.els.hint.textContent='Переподключение...';
+        C.els.btn.textContent='Переподключение...';C.els.btn.disabled=true;
+        setTimeout(crashConnect,3000);
+    };
+    C.ws.onerror=()=>{};
+    C.ws.onmessage=(e)=>{
+        let m;try{m=JSON.parse(e.data);}catch{return;}
+        switch(m.type){
+            case 'state':        cOnState(m);break;
+            case 'round_start':  cOnRoundStart(m);break;
+            case 'betting_tick': cOnBettingTick(m);break;
+            case 'game_start':   cOnGameStart(m);break;
+            case 'tick':         cOnTick(m);break;
+            case 'new_bet':      cOnNewBet(m);break;
+            case 'player_cashout':cOnPlayerCashout(m);break;
+            case 'crashed':      cOnCrashed(m);break;
+            case 'bet_confirmed':cOnBetConfirmed(m);break;
+            case 'cashout_ok':   cOnCashoutOk(m);break;
+            case 'error':        cOnError(m);break;
+            case 'online':       cOnOnline(m);break;
+            case 'chat':         cOnChatMsg(m);break;
+        }
+    };
+}
+
+function cOnState(m){
+    C.state=m.state;C.roundId=m.round_id;C.roundHash=m.hash||'';
+    C.history=m.history||[];C.players=m.players||[];
+    cRenderHistory();cRenderFeed();
+    C.els.roundId.textContent='#'+C.roundId;cUpdateHash();
+    if(m.online) C.els.online.textContent='🟢 '+m.online+' онлайн';
+    if(C.state==='betting'){cSetBettingUI(m.betting_remaining||10);}
+    else if(C.state==='running'){
+        C.mult=m.mult||1;C.t0=Date.now()-(m.elapsed||0)*1000;
+        C.els.mult.textContent='x'+C.mult.toFixed(2);
+        C.els.hint.textContent='🚀 В полёте!';
+        C.els.timerBar.style.display='none';
+        cUpdateRunningBtn();cDraw(m.elapsed||0,false);
+        C.animFrame=requestAnimationFrame(cAnimLoop);
+    } else if(C.state==='crashed'){
+        C.els.hint.textContent='💥 Ожидание нового раунда...';cSetWaitingBtn();
+    } else {C.els.hint.textContent='Ожидание раунда...';cSetWaitingBtn();}
+}
+
+function cOnRoundStart(m){
+    C.state='betting';C.roundId=m.round_id;C.roundHash=m.hash;
+    C.myBet=null;C.myCashout=null;C.players=[];C.mult=1;
+    C.bettingDuration=m.betting_duration||10;
+    cStopAnim();cRenderFeed();
+    C.els.mult.textContent='x1.00';C.els.mult.classList.remove('crashed');
+    C.els.roundId.textContent='#'+C.roundId;cUpdateHash();
+    cSetBettingUI(m.betting_duration||10);cDraw(0,false);haptic('light');
+}
+
+function cSetBettingUI(rem){
+    C.els.hint.textContent='⏳ Делайте ставки!';
+    C.els.timerBar.style.display='block';
+    C.els.timerFill.style.width=(rem/C.bettingDuration*100)+'%';
+    C.els.timerFill.style.background='';
+    C.els.timerText.textContent=Math.ceil(rem)+'s';
+    if(!C.myBet){C.els.btn.textContent='🎯 Поставить';C.els.btn.className='btn btn-brand';C.els.btn.disabled=false;}
+    else{C.els.btn.textContent='✅ Ставка сделана';C.els.btn.className='btn btn-brand';C.els.btn.disabled=true;}
+}
+
+function cOnBettingTick(m){
+    C.els.timerFill.style.width=(m.remaining/10*100)+'%';
+    C.els.timerText.textContent=Math.ceil(m.remaining)+'s';
+    if(m.remaining<=3) C.els.timerFill.style.background='linear-gradient(90deg,var(--red),#ff6655)';
+}
+
+function cOnGameStart(m){
+    C.state='running';C.players=m.players||[];C.t0=Date.now();C.mult=1;
+    C.els.hint.textContent='🚀 В полёте!';
+    C.els.timerBar.style.display='none';C.els.timerFill.style.background='';
+    cRenderFeed();cUpdateRunningBtn();haptic('medium');
+    C.animFrame=requestAnimationFrame(cAnimLoop);
+}
+
+function cOnTick(m){
+    const drift=Math.abs(C.mult-m.mult);
+    if(drift>.15) C.t0=Date.now()-m.elapsed*1000;
+}
+
+function cOnNewBet(m){
+    C.players.push({user_id:m.user_id,username:m.username,amount:m.amount,cashout:null});
+    cRenderFeed();
+}
+
+function cOnPlayerCashout(m){
+    const p=C.players.find(p=>p.user_id===m.user_id);
+    if(p){p.cashout=m.mult;p.winnings=m.winnings;}
+    cRenderFeed();
+}
+
+function cOnCrashed(m){
+    C.state='crashed';C.mult=m.crash_point;cStopAnim();
+    C.els.mult.textContent='x'+m.crash_point.toFixed(2);
+    C.els.mult.classList.add('crashed');
+    C.els.hint.textContent='💥 Краш на x'+m.crash_point.toFixed(2);
+    C.history=m.history||[];cRenderHistory();
+    if(m.results){
+        C.players=m.results.map(r=>({username:r.username,amount:r.amount,
+            cashout:r.won?r.mult:null,winnings:r.won?r.winnings:0,lost:!r.won}));
+        cRenderFeed();
+    }
+    const el2=(C.t0?(Date.now()-C.t0)/1000:5);
+    cDraw(el2,true);haptic('heavy');sndLose();
+    if(C.myBet&&!C.myCashout){
+        setTimeout(()=>{openModal('💥','Краш!','Упало на x'+m.crash_point.toFixed(2),'-'+fmtFull(C.myBet.amount),false);autoCloseTimer=setTimeout(closeModal,1500);},400);
+    }
+    cSetWaitingBtn();
+}
+
+function cOnBetConfirmed(m){
+    C.myBet={amount:m.amount};
+    balance=m.balance;renderBalances();try{localStorage.setItem('bfg_balance',balance);}catch(e){}
+    C.els.btn.textContent='✅ Ставка сделана';C.els.btn.disabled=true;haptic('light');
+}
+
+function cOnCashoutOk(m){
+    C.myCashout=m.mult;sndWin();
+    if(m.balance!==undefined){balance=m.balance;renderBalances();try{localStorage.setItem('bfg_balance',balance);}catch(e){}}
+    C.els.btn.textContent='✅ Забрано x'+m.mult.toFixed(2);
+    C.els.btn.className='btn btn-green';C.els.btn.disabled=true;
+    setTimeout(()=>{openModal('🎉','Забрано!','Множитель x'+m.mult.toFixed(2),'+'+fmtFull(m.winnings),true);autoCloseTimer=setTimeout(closeModal,1500);},200);
+}
+
+function cOnError(m){
+    C.els.hint.textContent='❌ '+m.msg;haptic('error');
+    setTimeout(()=>{if(C.state==='betting') C.els.hint.textContent='⏳ Делайте ставки!';},2000);
+}
+
+function cOnOnline(m){C.els.online.textContent='🟢 '+m.count+' онлайн';}
+
+function cOnChatMsg(m){
+    const d=document.createElement('div');d.className='chat-msg';
+    const nm=document.createElement('span');nm.className='chat-name';nm.textContent=m.username;
+    d.appendChild(nm);d.appendChild(document.createTextNode(m.text));
+    C.els.chat.appendChild(d);C.els.chat.scrollTop=C.els.chat.scrollHeight;
+    while(C.els.chat.children.length>50) C.els.chat.removeChild(C.els.chat.firstChild);
+}
+
+function cUpdateRunningBtn(){
+    if(C.myBet&&!C.myCashout){C.els.btn.textContent='💎 Забрать';C.els.btn.className='btn btn-green';C.els.btn.disabled=false;}
+    else if(C.myCashout){C.els.btn.textContent='✅ Забрано x'+C.myCashout.toFixed(2);C.els.btn.className='btn btn-green';C.els.btn.disabled=true;}
+    else{C.els.btn.textContent='Ставки закрыты';C.els.btn.className='btn btn-brand';C.els.btn.disabled=true;}
+}
+function cSetWaitingBtn(){C.els.btn.textContent='Ожидание раунда...';C.els.btn.className='btn btn-brand';C.els.btn.disabled=true;}
+function cUpdateHash(){
+    if(C.roundHash) C.els.hashShort.textContent='🔒 '+C.roundHash.substring(0,8)+'...';
+    C.els.hashShort.title=C.roundHash||'';
+}
+function cRenderHistory(){
+    C.els.histBar.innerHTML=C.history.map(h=>`<span class="h-chip ${h.crash_point>=2?'w':'l'}">x${h.crash_point.toFixed(2)}</span>`).join('');
+}
+function cRenderFeed(){
+    if(!C.players||!C.players.length){C.els.feed.innerHTML='<div class="crash-feed-empty">Пока никого...</div>';return;}
+    C.els.feed.innerHTML=C.players.map(p=>{
+        let rh;
+        if(p.cashout) rh=`<span class="feed-result won">x${p.cashout.toFixed(2)} → ${fmtShort(p.winnings||p.amount*p.cashout)}</span>`;
+        else if(p.lost) rh=`<span class="feed-result lost">💥</span>`;
+        else rh=`<span class="feed-result pending">⏳</span>`;
+        return `<div class="feed-item"><span class="feed-name">${escHtml(p.username||'Player')}</span><span class="feed-amount">${fmtShort(p.amount)}</span>${rh}</div>`;
+    }).join('');
+}
+
+function cPlaceBet(){
+    if(!C.connected||C.state!=='betting'||C.myBet) return;
+    const amt=parseFloat(C.els.betInput.value);
+    if(!amt||amt<=0){openModal('⚠️','Ошибка','','Введите ставку',null);return;}
+    const avail=getActiveBalance();
+    if(amt>avail){openModal('⚠️','Мало средств','',activeWallet==='donate'?fmtDonate(avail):fmtShort(avail),null);return;}
+    const msg={type:'place_bet',amount:amt,wallet:activeWallet};
+    const ac=parseFloat(C.els.autoCashout.value);
+    if(ac&&ac>=1.01) msg.auto_cashout=ac;
+    C.ws.send(JSON.stringify(msg));sndClick();
+}
+
+function cCashout(){
+    if(!C.connected||C.state!=='running'||!C.myBet||C.myCashout) return;
+    C.ws.send(JSON.stringify({type:'cashout'}));sndClick();
+}
+
+C.els.btn.addEventListener('click',()=>{
+    if(C.state==='betting'&&!C.myBet) cPlaceBet();
+    else if(C.state==='running'&&C.myBet&&!C.myCashout) cCashout();
+});
+
+C.els.chatSend.addEventListener('click',()=>{
+    const t=C.els.chatInput.value.trim();
+    if(!t||!C.connected) return;
+    C.ws.send(JSON.stringify({type:'chat',text:t}));
+    C.els.chatInput.value='';
+});
+C.els.chatInput.addEventListener('keydown',e=>{if(e.key==='Enter') C.els.chatSend.click();});
+C.els.hashShort.addEventListener('click',()=>{
+    if(C.roundHash){navigator.clipboard.writeText(C.roundHash).catch(()=>{});haptic('light');}
+});
+
+bindQB('cBetCard','cBetInput');
+
+/* Lazy WS connect — only when crash tab is opened */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+        if(btn.dataset.tab==='crash'&&!crashConnected){
+            crashConnected=true;crashConnect();
+        }
+    });
+});
+
+requestAnimationFrame(()=>{cSyncCanvas();cDraw(0,false);});
 
 /* ════════════════════════════════════════════════════════
    MINESWEEPER  (6×6 = 36 cells, no safe first click)

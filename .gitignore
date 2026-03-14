@@ -1,5 +1,9 @@
 # Секреты
 bot/.env
+server/.env
+
+# Node.js
+node_modules/
 
 # База данных
 *.db
