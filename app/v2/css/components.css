@@ -1,0 +1,221 @@
+/* ═══════════════════════════════════════════════════
+   COMPONENTS — кнопки, модальные, конфетти, deposit, ripple
+═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════ */
+.btn {
+    width:100%; padding:14px;
+    border:none; border-radius:var(--r);
+    font-size:14px; font-weight:800;
+    text-transform:uppercase; letter-spacing:1px;
+    cursor:pointer;
+    transition:transform .13s, box-shadow .18s, opacity .18s;
+    overflow:hidden; position:relative;
+}
+.btn::after { content:''; position:absolute; inset:0; background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.14) 50%,transparent 60%); transform:translateX(-100%); }
+.btn:active:not(:disabled)::after { transform:translateX(100%); transition:transform .35s ease; }
+.btn:active:not(:disabled) { transform:scale(0.978); }
+.btn:disabled { opacity:.35; cursor:not-allowed; }
+
+.btn-brand { background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff; box-shadow:0 4px 20px var(--brand-mid); }
+.btn-green { background:linear-gradient(135deg,#00c96a,#009950); color:#001a0d; box-shadow:0 4px 20px rgba(0,185,100,0.30); }
+
+/* ═══════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════ */
+.modal-ov {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.78);
+    backdrop-filter:blur(14px);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; opacity:0; pointer-events:none;
+    transition:opacity .24s;
+}
+.modal-ov.open { opacity:1; pointer-events:auto; }
+
+.modal-box {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:20px; padding:26px 20px;
+    text-align:center; width:82%; max-width:310px;
+    transform:scale(0.8) translateY(20px);
+    transition:transform .32s cubic-bezier(0.34,1.56,0.64,1), var(--tr);
+    box-shadow:var(--shadow);
+}
+[data-theme="dark"] .modal-box { box-shadow:0 24px 72px rgba(0,0,0,0.65), 0 0 36px var(--brand-lo); }
+.modal-ov.open .modal-box { transform:scale(1) translateY(0); }
+.modal-ov.open.modal-win .modal-box {
+    animation:modalBounceWin .55s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    border-color:rgba(0,230,118,0.35);
+    box-shadow:0 24px 72px rgba(0,0,0,0.65), 0 0 40px rgba(0,230,118,0.18);
+}
+.modal-ov.open.modal-lose .modal-box {
+    animation:modalShakeLose .5s ease forwards;
+    border-color:rgba(255,68,85,0.35);
+    box-shadow:0 24px 72px rgba(0,0,0,0.65), 0 0 40px rgba(255,68,85,0.18);
+}
+@keyframes modalBounceWin {
+    0%   { transform:scale(0.7) translateY(30px); opacity:0; }
+    60%  { transform:scale(1.06) translateY(-4px); opacity:1; }
+    80%  { transform:scale(0.98) translateY(2px); }
+    100% { transform:scale(1) translateY(0); }
+}
+@keyframes modalShakeLose {
+    0%   { transform:scale(0.85) translateY(15px); opacity:0; }
+    40%  { transform:scale(1.02) translateY(0); opacity:1; }
+    55%  { transform:scale(1) translateX(-6px); }
+    70%  { transform:scale(1) translateX(6px); }
+    85%  { transform:scale(1) translateX(-3px); }
+    100% { transform:scale(1) translateX(0); }
+}
+
+.modal-emoji  { font-size:62px; margin-bottom:12px; line-height:1; }
+.modal-title  { font-size:24px; font-weight:900; margin-bottom:5px; }
+.modal-sub    { font-size:12px; color:var(--muted); margin-bottom:4px; transition:var(--tr); }
+.modal-amt    { font-size:36px; font-weight:900; letter-spacing:-1px; margin:5px 0 20px; font-variant-numeric:tabular-nums; }
+.modal-amt.win  { color:var(--green); text-shadow:0 0 20px rgba(0,230,118,0.4); }
+.modal-amt.lose { color:var(--red); text-shadow:0 0 20px rgba(255,68,85,0.35); }
+
+.modal-cta {
+    width:100%; padding:13px; border:none; border-radius:10px;
+    font-size:14px; font-weight:800; cursor:pointer;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff; letter-spacing:.5px;
+    box-shadow:0 4px 18px var(--brand-mid);
+    transition:transform .13s;
+}
+.modal-cta:active { transform:scale(0.97); }
+
+/* ═══════════════════════════════════════════════════
+   CONFETTI CANVAS
+═══════════════════════════════════════════════════ */
+#confettiCanvas {
+    position:fixed; inset:0;
+    pointer-events:none;
+    z-index:999;
+    opacity:0;
+    transition:opacity .3s;
+}
+#confettiCanvas.active { opacity:1; }
+
+/* ═══════════════════════════════════════════════════
+   DEPOSIT MODAL
+═══════════════════════════════════════════════════ */
+.deposit-ov {
+    position:fixed; inset:0;
+    background:rgba(0,0,0,0.82);
+    backdrop-filter:blur(16px);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index:1100; opacity:0; pointer-events:none;
+    transition:opacity .24s;
+}
+.deposit-ov.open { opacity:1; pointer-events:auto; }
+
+.deposit-box {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    border-radius:20px 20px 0 0;
+    padding:24px 20px 32px;
+    width:100%; max-width:480px;
+    transform:translateY(100%);
+    transition:transform .34s cubic-bezier(0.34,1.4,0.64,1), var(--tr);
+    box-shadow:var(--shadow);
+}
+[data-theme="dark"] .deposit-box { box-shadow:0 -16px 60px rgba(0,0,0,0.6), 0 0 40px var(--brand-lo); }
+.deposit-ov.open .deposit-box { transform:translateY(0); }
+
+.deposit-handle {
+    width:36px; height:4px; border-radius:2px;
+    background:var(--border); margin:0 auto 18px;
+}
+
+.deposit-title {
+    font-size:20px; font-weight:900;
+    text-align:center; margin-bottom:4px;
+    color:var(--text);
+}
+.deposit-sub {
+    font-size:12px; color:var(--muted);
+    text-align:center; margin-bottom:20px;
+    transition:var(--tr);
+}
+
+.deposit-presets {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px; margin-bottom:14px;
+}
+.dep-preset {
+    padding:14px 6px;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:var(--r);
+    color:var(--text); font-size:15px; font-weight:800;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .12s, box-shadow .18s;
+    backdrop-filter:blur(8px);
+}
+.dep-preset:hover {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    box-shadow:0 0 14px var(--brand-mid);
+}
+.dep-preset:active { transform:scale(0.9); }
+
+.deposit-manual-row {
+    display:flex; gap:8px; margin-bottom:16px; align-items:stretch;
+}
+.deposit-input {
+    flex:1; padding:12px 14px;
+    background:var(--input-bg);
+    border:1.5px solid var(--border);
+    border-radius:var(--r);
+    color:var(--text); font-size:17px; font-weight:700;
+    outline:none;
+    transition:var(--tr), box-shadow .2s;
+    font-variant-numeric:tabular-nums;
+}
+.deposit-input:focus { border-color:var(--brand-hi); box-shadow:0 0 0 3px var(--brand-lo); }
+.dep-manual-btn {
+    padding:0 18px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));
+    border:none; border-radius:var(--r);
+    color:#fff; font-size:13px; font-weight:800;
+    cursor:pointer; white-space:nowrap;
+    box-shadow:0 4px 18px var(--brand-mid);
+    transition:transform .12s, opacity .18s;
+    letter-spacing:.3px;
+}
+.dep-manual-btn:active { transform:scale(0.94); }
+.dep-manual-btn:disabled { opacity:.35; cursor:not-allowed; }
+
+.deposit-success {
+    text-align:center; padding:10px 0 4px;
+    display:none;
+}
+.deposit-success.show { display:block; }
+.dep-success-icon { font-size:52px; margin-bottom:10px; line-height:1; }
+.dep-success-text {
+    font-size:20px; font-weight:900;
+    color:var(--green);
+    text-shadow:0 0 20px rgba(0,230,118,0.35);
+    margin-bottom:6px;
+}
+.dep-success-sub { font-size:12px; color:var(--muted); margin-bottom:18px; }
+
+/* ═══════════════════════════════════════════════════
+   RIPPLE EFFECT
+═══════════════════════════════════════════════════ */
+.ripple-effect {
+    position:absolute;
+    border-radius:50%;
+    background:rgba(255,255,255,0.28);
+    transform:scale(0);
+    animation:rippleAnim .5s linear;
+    pointer-events:none;
+}
+@keyframes rippleAnim {
+    to { transform:scale(4); opacity:0; }
+}

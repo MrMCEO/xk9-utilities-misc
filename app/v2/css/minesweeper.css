@@ -1,0 +1,106 @@
+/* ═══════════════════════════════════════════════════
+   MINESWEEPER
+═══════════════════════════════════════════════════ */
+
+/* Mine count row */
+.mine-count-row {
+    display:flex; gap:8px; align-items:stretch;
+    margin-bottom:9px;
+}
+
+.mine-opts { display:flex; gap:6px; flex:1; }
+
+.mine-opt {
+    flex:1; padding:10px 3px;
+    background:var(--card);
+    border:1.5px solid var(--border);
+    border-radius:9px;
+    color:var(--muted); font-size:12px; font-weight:700;
+    cursor:pointer; text-align:center;
+    transition:var(--tr), transform .1s;
+}
+.mine-opt.sel {
+    background:var(--brand-lo);
+    border-color:var(--brand-hi);
+    color:var(--brand);
+    box-shadow:0 0 10px var(--brand-mid);
+}
+.mine-opt:active { transform:scale(0.91); }
+
+.mine-manual-wrap {
+    display:flex; align-items:center;
+    background:var(--input-bg);
+    border:1.5px solid var(--border);
+    border-radius:9px; padding:0 10px;
+    gap:4px; min-width:80px;
+}
+.mine-manual-icon { font-size:13px; }
+.mine-manual {
+    width:36px;
+    background:transparent; border:none;
+    color:var(--text); font-size:16px; font-weight:700;
+    outline:none; text-align:center;
+    font-variant-numeric:tabular-nums;
+}
+
+/* 6×6 Grid */
+.mine-grid {
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:4px; margin-bottom:10px;
+    max-width:340px;
+    margin-left:auto; margin-right:auto;
+}
+
+.m-cell {
+    aspect-ratio:1; border-radius:8px;
+    background:var(--card); border:1px solid var(--border);
+    cursor:default;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0;
+    transition:background .13s, border-color .13s, transform .11s, box-shadow .13s;
+    position:relative; overflow:hidden; user-select:none;
+    contain:layout style;
+}
+.m-cell::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:42%;
+    background:linear-gradient(180deg,rgba(255,255,255,0.06),transparent);
+    border-radius:inherit; pointer-events:none;
+}
+
+.mine-grid.playing .m-cell.hidden { cursor:pointer; }
+.mine-grid.playing .m-cell.hidden:hover {
+    transform:scale(0.9);
+    background:var(--brand-lo); border-color:var(--brand-hi);
+    box-shadow:0 0 14px var(--brand-mid);
+}
+.mine-grid.playing .m-cell.hidden:active { transform:scale(0.82); }
+
+.m-cell.safe {
+    background:var(--green-lo); border-color:rgba(0,230,118,0.42);
+    box-shadow:0 0 12px rgba(0,230,118,0.13);
+    font-size:20px; animation:rSafe .32s cubic-bezier(0.34,1.56,0.64,1);
+}
+.m-cell.mine-hit {
+    background:var(--red-lo); border-color:rgba(255,68,85,0.6);
+    box-shadow:0 0 22px rgba(255,68,85,0.35);
+    font-size:20px; animation:rBoom .44s ease;
+}
+.m-cell.mine-show {
+    background:rgba(255,68,85,0.07); border-color:rgba(255,68,85,0.25);
+    font-size:18px; opacity:.55;
+}
+
+@keyframes rSafe {
+    0%{transform:scale(0.4) rotate(-18deg);opacity:0}
+    65%{transform:scale(1.14) rotate(4deg)}
+    100%{transform:scale(1) rotate(0);opacity:1}
+}
+@keyframes rBoom {
+    0%{transform:scale(1)}
+    25%{transform:scale(1.45)}
+    55%{transform:scale(0.87)}
+    80%{transform:scale(1.12)}
+    100%{transform:scale(1)}
+}
