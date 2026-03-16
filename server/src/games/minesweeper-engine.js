@@ -1,0 +1,133 @@
+'use strict';
+
+const { createSession, getSession, deleteSession, updateSession } = require('./session-store');
+const { updateBalanceChecked, updateDonateBalanceChecked, updateBalance, updateDonateBalance } = require('../db/users');
+const { addGame } = require('../db/games');
+
+const GRID_SIZE = 36; // 6x6
+
+/**
+ * Расставить мины (Fisher-Yates shuffle).
+ * @param {number} mineCount
+ * @returns {Set<number>} — множество индексов мин
+ */
+function placeMines(mineCount) {
+  const cells = Array.from({ length: GRID_SIZE }, (_, i) => i);
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  return new Set(cells.slice(0, mineCount));
+}
+
+/**
+ * Множитель по количеству открытых клеток.
+ * Формула: (1 / prob) * 0.97, где prob = вероятность не нажать мину.
+ * @param {number} opened — открыто ячеек
+ * @param {number} mineCount — количество мин
+ */
+function calcMultiplier(opened, mineCount) {
+  if (opened === 0) return 1.0;
+  const safe = GRID_SIZE - mineCount;
+  let prob = 1.0;
+  for (let i = 0; i < opened; i++) {
+    prob *= (safe - i) / (GRID_SIZE - i);
+  }
+  return Math.round((1 / prob) * 0.97 * 100) / 100;
+}
+
+/**
+ * Начать игру в Сапёра.
+ */
+function start(userId, stake, wallet = 'main', mineCount = 5) {
+  mineCount = Math.max(1, Math.min(30, mineCount));
+
+  const useDonate = wallet === 'donate';
+  let result;
+  if (useDonate) {
+    result = updateDonateBalanceChecked(userId, Math.round(stake));
+  } else {
+    result = updateBalanceChecked(userId, -stake);
+  }
+  if (!result.success) {
+    return { ok: false, error: 'insufficient_funds', balance: result.balance };
+  }
+
+  const mines = placeMines(mineCount);
+  const sessionId = createSession(userId, 'minesweeper', {
+    stake,
+    wallet,
+    mines: [...mines],
+    mineCount,
+    opened: [],
+    revealed: false,
+  });
+
+  return { ok: true, sessionId, balance: result.balance };
+}
+
+/**
+ * Нажать на клетку.
+ * @returns {{ ok: bool, hit?: bool, multiplier?, opened?, error? }}
+ */
+function tap(sessionId, cellIndex) {
+  const session = getSession(sessionId);
+  if (!session) return { ok: false, error: 'session_not_found' };
+
+  if (cellIndex < 0 || cellIndex >= GRID_SIZE) return { ok: false, error: 'invalid_cell' };
+  if (session.opened.includes(cellIndex)) return { ok: false, error: 'already_opened' };
+
+  const mineSet = new Set(session.mines);
+
+  if (mineSet.has(cellIndex)) {
+    // Попали на мину
+    addGame(session.userId, 'minesweeper', session.stake, 'lose', 0, 1.0);
+    deleteSession(sessionId);
+    return { ok: true, hit: true, mines: [...mineSet] };
+  }
+
+  // Безопасная клетка
+  const newOpened = [...session.opened, cellIndex];
+  updateSession(sessionId, { opened: newOpened });
+
+  const multiplier = calcMultiplier(newOpened.length, session.mineCount);
+  return { ok: true, hit: false, multiplier, opened: newOpened };
+}
+
+/**
+ * Забрать выигрыш.
+ */
+function cashout(sessionId) {
+  const session = getSession(sessionId);
+  if (!session) return { ok: false, error: 'session_not_found' };
+  if (session.opened.length === 0) {
+    // Ничего не открыто — возвращаем ставку
+    const useDonate = session.wallet === 'donate';
+    let newBalance;
+    if (useDonate) {
+      newBalance = updateDonateBalance(session.userId, Math.round(session.stake));
+    } else {
+      newBalance = updateBalance(session.userId, session.stake);
+    }
+    deleteSession(sessionId);
+    return { ok: true, multiplier: 1.0, winnings: session.stake, balance: newBalance };
+  }
+
+  const multiplier = calcMultiplier(session.opened.length, session.mineCount);
+  const winnings = Math.round(session.stake * multiplier * 100) / 100;
+  const useDonate = session.wallet === 'donate';
+
+  let newBalance;
+  if (useDonate) {
+    newBalance = updateDonateBalance(session.userId, Math.round(winnings));
+  } else {
+    newBalance = updateBalance(session.userId, winnings);
+  }
+
+  addGame(session.userId, 'minesweeper', session.stake, 'win', winnings, multiplier);
+  deleteSession(sessionId);
+
+  return { ok: true, multiplier, winnings, balance: newBalance };
+}
+
+module.exports = { start, tap, cashout, calcMultiplier };
