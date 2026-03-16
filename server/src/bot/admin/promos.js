@@ -34,7 +34,7 @@ async function cbAdminPromos(ctx) {
 /** Callback admin_create_promo */
 async function cbAdminCreatePromo(ctx) {
   if (!requireAdmin(ctx)) return;
-  promoFsm.set(ctx.from.id, { step: 'waiting_code' });
+  promoFsm.set(ctx.from.id, { step: 'waiting_code', ts: Date.now() });
   await ctx.editMessageText(
     '🎁 <b>Создание промо-кода</b>\n\nВведите код (латинские буквы и цифры):',
     { parse_mode: 'HTML' }
@@ -59,7 +59,7 @@ async function handlePromoFsm(ctx) {
       await ctx.reply('❌ Код должен содержать только латинские буквы и цифры:');
       return true;
     }
-    promoFsm.set(ctx.from.id, { ...state, step: 'waiting_bonus', code });
+    promoFsm.set(ctx.from.id, { ...state, step: 'waiting_bonus', code, ts: Date.now() });
     await ctx.reply(`Код: <code>${code}</code>\n\nВведите бонус (количество монет):`, { parse_mode: 'HTML' });
     return true;
   }
@@ -70,7 +70,7 @@ async function handlePromoFsm(ctx) {
       await ctx.reply('❌ Введите целое положительное число:');
       return true;
     }
-    promoFsm.set(ctx.from.id, { ...state, step: 'waiting_max_uses', bonus });
+    promoFsm.set(ctx.from.id, { ...state, step: 'waiting_max_uses', bonus, ts: Date.now() });
     await ctx.reply(`Бонус: <b>${bonus.toLocaleString('ru')} монет</b>\n\nВведите максимальное количество использований:`, { parse_mode: 'HTML' });
     return true;
   }
@@ -106,4 +106,7 @@ function clearPromoFsm(userId) {
   promoFsm.delete(userId);
 }
 
-module.exports = { cbAdminPromos, cbAdminCreatePromo, handlePromoFsm, clearPromoFsm };
+/** Геттер для TTL-очистки из bot/index.js */
+function getFsmMap() { return promoFsm; }
+
+module.exports = { cbAdminPromos, cbAdminCreatePromo, handlePromoFsm, clearPromoFsm, getFsmMap };

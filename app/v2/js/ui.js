@@ -184,9 +184,14 @@ export function pushHistory(arr, barId, won, label) {
     if (arr.length > HIST_MAX) arr.pop();
     const bar = document.getElementById(barId);
     if (!bar) return;
-    bar.innerHTML = arr.map(h =>
-        `<span class="h-chip ${h.won ? 'w' : 'l'}">${h.label}</span>`
-    ).join('');
+    // Безопасное построение DOM без innerHTML — защита от XSS
+    bar.textContent = '';
+    arr.forEach(h => {
+        const span = document.createElement('span');
+        span.className = `h-chip ${h.won ? 'w' : 'l'}`;
+        span.textContent = h.label;
+        bar.appendChild(span);
+    });
 }
 
 /* ════════════════════════════════════

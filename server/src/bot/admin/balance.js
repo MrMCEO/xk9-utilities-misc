@@ -15,7 +15,7 @@ function escapeHtml(str) {
 /** Callback admin_balance — запросить ID/username */
 async function cbAdminBalance(ctx) {
   if (!requireAdmin(ctx)) return;
-  balanceFsm.set(ctx.from.id, { step: 'waiting_user_id' });
+  balanceFsm.set(ctx.from.id, { step: 'waiting_user_id', ts: Date.now() });
   await ctx.editMessageText(
     '💰 <b>Управление балансом</b>\n\nВведите Telegram ID или @username пользователя:',
     { parse_mode: 'HTML' }
@@ -69,7 +69,7 @@ async function handleBalanceFsm(ctx) {
       return true;
     }
 
-    balanceFsm.set(ctx.from.id, { step: 'waiting_amount', targetUserId: user.telegram_id });
+    balanceFsm.set(ctx.from.id, { step: 'waiting_amount', targetUserId: user.telegram_id, ts: Date.now() });
     await ctx.reply(
       `Пользователь: <b>${escapeHtml(user.first_name || 'Unknown')}</b>\n` +
       `ID: <code>${user.telegram_id}</code>\n` +
@@ -101,4 +101,7 @@ function clearBalanceFsm(userId) {
   balanceFsm.delete(userId);
 }
 
-module.exports = { cbAdminBalance, setbalanceCommand, handleBalanceFsm, clearBalanceFsm };
+/** Геттер для TTL-очистки из bot/index.js */
+function getFsmMap() { return balanceFsm; }
+
+module.exports = { cbAdminBalance, setbalanceCommand, handleBalanceFsm, clearBalanceFsm, getFsmMap };

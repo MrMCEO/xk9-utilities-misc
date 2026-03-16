@@ -216,6 +216,14 @@ function mpResetBet() {
 }
 
 /* ── UI helpers ── */
+
+/** Экранировать HTML — защита от XSS при вставке данных от других игроков */
+function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = String(str ?? '');
+    return d.innerHTML;
+}
+
 function mpUpdateStatus(text) {
     const el = document.getElementById('mpStatus');
     if (el) el.textContent = text;
@@ -235,9 +243,10 @@ function mpRenderPlayers() {
         list.innerHTML = '<div style="color:var(--muted);font-size:11px;text-align:center;padding:8px">Нет игроков</div>';
         return;
     }
+    // Имя игрока экранируется через esc() — защита от XSS
     list.innerHTML = MPCrash.players.map(p => `
         <div class="crash-mp-player-row ${p.lost ? 'lost' : ''}">
-            <span class="name">${p.name || 'Игрок'}</span>
+            <span class="name">${esc(p.name || 'Игрок')}</span>
             <span class="bet">${fmtShort(p.stake)}</span>
             <span class="mult">${p.cashed_out ? 'x' + p.mult.toFixed(2) : p.lost ? '💥' : '…'}</span>
         </div>

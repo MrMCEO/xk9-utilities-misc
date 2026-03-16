@@ -11,7 +11,7 @@ const broadcastFsm = new Map();
 /** Callback admin_broadcast */
 async function cbAdminBroadcast(ctx) {
   if (!requireAdmin(ctx)) return;
-  broadcastFsm.set(ctx.from.id, { step: 'waiting_text' });
+  broadcastFsm.set(ctx.from.id, { step: 'waiting_text', ts: Date.now() });
   await ctx.editMessageText(
     '📢 Рассылка\n\nВведите текст сообщения для всех пользователей:',
   );
@@ -75,4 +75,7 @@ function clearBroadcastFsm(userId) {
   broadcastFsm.delete(userId);
 }
 
-module.exports = { cbAdminBroadcast, handleBroadcastFsm, clearBroadcastFsm };
+/** Геттер для TTL-очистки из bot/index.js */
+function getFsmMap() { return broadcastFsm; }
+
+module.exports = { cbAdminBroadcast, handleBroadcastFsm, clearBroadcastFsm, getFsmMap };

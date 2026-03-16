@@ -174,7 +174,7 @@ function createBot() {
     const userId = ctx.from.id;
     clearBalanceFsm(userId); clearBroadcastFsm(userId); clearPromoFsm(userId);
     // Выставить FSM-ожидание произвольной суммы
-    donateFsm.set(ctx.from.id, { step: 'waiting_amount' });
+    donateFsm.set(ctx.from.id, { step: 'waiting_amount', ts: Date.now() });
     await ctx.reply(
       '✏️ <b>Произвольная сумма</b>\n\nВведите количество звёзд (минимум 1, максимум 2500):',
       { parse_mode: 'HTML' }
@@ -230,5 +230,21 @@ function createBot() {
 
 // FSM для donate custom amount (Map<userId, state>)
 const donateFsm = new Map();
+
+// TTL-очистка FSM состояний каждую минуту — защита от утечки памяти при брошенных диалогах
+const FSM_TTL_MS = 5 * 60 * 1000; // 5 минут
+setInterval(() => {
+  const now = Date.now();
+  // Импортируем FSM-хранилища через геттеры модулей
+  const { getFsmMap: getBalanceFsmMap } = require('./admin/balance');
+  const { getFsmMap: getBroadcastFsmMap } = require('./admin/broadcast');
+  const { getFsmMap: getPromoFsmMap } = require('./admin/promos');
+  for (const fsmMap of [getBalanceFsmMap?.(), getBroadcastFsmMap?.(), getPromoFsmMap?.(), donateFsm]) {
+    if (!fsmMap) continue;
+    for (const [uid, state] of fsmMap) {
+      if (now - (state.ts || 0) > FSM_TTL_MS) fsmMap.delete(uid);
+    }
+  }
+}, 60_000);
 
 module.exports = { createBot };

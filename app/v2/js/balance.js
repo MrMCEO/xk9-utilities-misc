@@ -88,6 +88,9 @@ export function renderBalances() {
 }
 
 /* ── Инициализация баланса из URL-параметра ?b=N ── */
+/* Баланс из URL — только для первоначального отображения.
+ * Реальный баланс синхронизируется через API-ответы (setBalanceFromServer).
+ * НЕ записываем в localStorage из URL — только сервер является источником правды. */
 export function initBalanceFromUrl() {
     try {
         const urlB = new URLSearchParams(window.location.search).get('b');
@@ -95,7 +98,7 @@ export function initBalanceFromUrl() {
             const val = parseFloat(urlB);
             if (!isNaN(val) && val >= 0) {
                 balance = val;
-                try { localStorage.setItem('bfg_balance', balance); } catch(e) {}
+                // Не сохраняем в localStorage — баланс из URL только для отображения до первого API-ответа
                 const balEl = document.getElementById('balVal');
                 if (balEl) balEl.textContent = fmtShort(balance);
             }
@@ -104,6 +107,8 @@ export function initBalanceFromUrl() {
 }
 
 /* ── Инициализация донатного баланса из URL-параметра ?db=N ── */
+/* Донат-баланс из URL — только для первоначального отображения.
+ * НЕ записываем в localStorage из URL — только сервер является источником правды. */
 export function initDonateFromUrl() {
     try {
         const urlDb = new URLSearchParams(window.location.search).get('db');
@@ -112,7 +117,7 @@ export function initDonateFromUrl() {
             const val = parseInt(urlDb);
             if (!isNaN(val) && val >= 0) {
                 donateBalance = val;
-                try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+                // Не сохраняем в localStorage — баланс из URL только для отображения до первого API-ответа
                 if (balDonEl) balDonEl.textContent = fmtDonate(donateBalance);
             }
         } else {
@@ -122,7 +127,7 @@ export function initDonateFromUrl() {
                 const m = ud.start_param.match(/^db(\d+)$/);
                 if (m) {
                     donateBalance = parseInt(m[1]);
-                    try { localStorage.setItem('bfg_donate_balance', donateBalance); } catch(e) {}
+                    // Не сохраняем в localStorage — баланс из URL только для отображения до первого API-ответа
                     if (balDonEl) balDonEl.textContent = fmtDonate(donateBalance);
                 }
             }

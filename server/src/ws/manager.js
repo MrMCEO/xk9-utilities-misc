@@ -8,6 +8,9 @@ const { getUser } = require('../db/users');
 // Map<ws, { telegramId: number, msgCount: number, lastReset: number }>
 const clients = new Map();
 
+// Максимальное число одновременных WS-соединений
+const MAX_WS_CLIENTS = 500;
+
 let crashGame = null;
 
 /** Инициализировать WebSocket сервер на /ws/crash */
@@ -19,6 +22,11 @@ function initWsServer(server) {
   crashGame.start();
 
   wss.on('connection', (ws, req) => {
+    // Лимит соединений — защита от DoS
+    if (clients.size >= MAX_WS_CLIENTS) {
+      ws.close(1013, 'Server overloaded');
+      return;
+    }
     clients.set(ws, { telegramId: null, msgCount: 0, lastReset: Date.now() });
 
     // Отправить текущее состояние новому клиенту

@@ -7,8 +7,6 @@ const { ADMIN_IDS } = require('../config');
 const rocketEngine = require('../games/rocket-engine');
 const mineEngine = require('../games/minesweeper-engine');
 const ladderEngine = require('../games/ladder-engine');
-// Legacy game handler (для совместимости с app/v2)
-const { processGameResult } = require('./game-legacy');
 
 const MAX_STAKE = 10_000_000;
 
@@ -33,7 +31,8 @@ function parseBody(req) {
 }
 
 /**
- * Вычислить CORS origin из WEB_APP_URL
+ * Вычислить CORS origin из WEB_APP_URL.
+ * Если WEB_APP_URL не настроен — в prod запрещаем CORS, в dev разрешаем всё.
  */
 function getCorsOrigin() {
   const { WEB_APP_URL } = require('../config');
@@ -43,7 +42,8 @@ function getCorsOrigin() {
       return `${u.protocol}//${u.host}`;
     } catch {}
   }
-  return '*';
+  // В production без настроенного WEB_APP_URL запрещаем CORS
+  return process.env.NODE_ENV === 'production' ? '' : '*';
 }
 
 function corsHeaders() {
@@ -51,6 +51,7 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': getCorsOrigin(),
     'Access-Control-Allow-Headers': 'Content-Type, X-Init-Data',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; connect-src 'self' wss: ws:",
   };
 }
 
@@ -85,16 +86,6 @@ async function handleRequest(req, res) {
   // Health check
   if (url === '/health' && method === 'GET') {
     json(res, { ok: true, ts: Date.now() });
-    return;
-  }
-
-  // ===== Legacy API (совместимость с app/v2/index.html) =====
-  if (url === '/api/game' && method === 'POST') {
-    const body = await parseBody(req);
-    const user = verifyInitData(getInitData(req, body));
-    if (!user) { json(res, { ok: false, error: 'unauthorized' }, 401); return; }
-    const result = await processGameResult(user.id, body);
-    json(res, result, result.ok ? 200 : 400);
     return;
   }
 

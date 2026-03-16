@@ -130,7 +130,8 @@ async function handleWebAppData(ctx) {
 
   addGame(telegramId, gameType, stake, won ? 'win' : 'lose', winnings, multiplier);
 
-  console.info(`Игра: ${gameType}, user=${telegramId}, wallet=${wallet}, stake=${stake}, mult=${multiplier}, won=${won}`);
+  // Логируем только последние 4 цифры ID — защита персональных данных
+  console.info(`Игра: ${gameType}, user=***${String(telegramId).slice(-4)}, wallet=${wallet}, stake=${stake}, mult=${multiplier}, won=${won}`);
 }
 
 module.exports = { handleWebAppData };

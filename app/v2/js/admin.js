@@ -22,6 +22,13 @@ export function initAdmin(curTabRef, tabMap) {
         adminData = JSON.parse(atob(urlParams.get('admindata') || 'e30='));
     } catch(e) { adminData = {}; }
 
+    // Убрать admindata из URL после чтения — предотвращает утечку в Referer-заголовки и логи сервера
+    if (urlParams.get('admindata')) {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('admindata');
+        window.history.replaceState({}, '', cleanUrl);
+    }
+
     let maintenanceOn = adminData.maintenance || false;
     let prevTab = curTabRef.value;
 
