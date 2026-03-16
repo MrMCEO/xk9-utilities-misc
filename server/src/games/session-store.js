@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const SESSION_TTL = 30 * 60 * 1000; // 30 минут
 
 // Map<sessionId, sessionData>
@@ -31,7 +33,8 @@ function createSession(userId, gameType, data) {
   if (existingId) {
     sessions.delete(existingId);
   }
-  const sessionId = `${userId}_${gameType}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  // Используем crypto для непредсказуемого sessionId
+  const sessionId = crypto.randomBytes(16).toString('hex');
   sessions.set(sessionId, { ...data, userId, gameType, createdAt: Date.now() });
   userGameIndex.set(key, sessionId);
   return sessionId;

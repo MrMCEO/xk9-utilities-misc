@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { createSession, getSession, deleteSession, updateSession } = require('./session-store');
 const { updateBalanceChecked, updateDonateBalanceChecked, updateBalance, updateDonateBalance } = require('../db/users');
 const { addGame } = require('../db/games');
@@ -9,34 +10,38 @@ const PLATFORMS_PER_ROW = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 10];
 const TOTAL_ROWS = PLATFORMS_PER_ROW.length;
 
 /**
- * Вычислить множитель по достигнутому ряду.
- * Вероятность добраться = произведение (1/platforms[r]) по каждому ряду.
+ * Вычислить множитель по достигнутому ряду с учётом stonesPerRow.
+ * Вероятность добраться = произведение ((platforms[r] - stones) / platforms[r]) по каждому ряду.
  * Множитель = (1/prob) * 0.97
+ * @param {number} row - число пройденных рядов
+ * @param {number} stonesPerRow - количество камней в ряду
  */
-function calcMultiplier(row) {
+function calcMultiplier(row, stonesPerRow) {
   if (row <= 0) return 1.0;
   let prob = 1.0;
   for (let r = 0; r < row; r++) {
-    prob *= 1 / PLATFORMS_PER_ROW[r];
+    prob *= (PLATFORMS_PER_ROW[r] - stonesPerRow) / PLATFORMS_PER_ROW[r];
   }
+  if (prob <= 0) return 1.0;
   return Math.round((1 / prob) * 0.97 * 100) / 100;
 }
 
 /**
- * Генерировать безопасные платформы для ряда.
- * @param {number} row - номер ряда (0-based)
- * @param {number} safeSlot - индекс безопасной платформы
- * @returns {Array<{ index: number, safe: bool }>}
- */
-function generateRow(row, safeSlot) {
-  const count = PLATFORMS_PER_ROW[row];
-  return Array.from({ length: count }, (_, i) => ({ index: i, safe: i === safeSlot }));
-}
-
-/**
  * Начать игру в Лестницу.
+ * @param {number} userId
+ * @param {number} stake
+ * @param {string} wallet
+ * @param {number} stonesPerRow - количество камней в ряду (1–7, default 3)
  */
-function start(userId, stake, wallet = 'main') {
+function start(userId, stake, wallet = 'main', stonesPerRow = 3) {
+  // Валидация ставки
+  if (!Number.isFinite(stake) || stake <= 0) {
+    return { ok: false, error: 'invalid_stake' };
+  }
+
+  // Валидация stonesPerRow
+  stonesPerRow = Math.max(1, Math.min(7, Math.floor(stonesPerRow) || 3));
+
   const useDonate = wallet === 'donate';
   let result;
   if (useDonate) {
@@ -51,22 +56,60 @@ function start(userId, stake, wallet = 'main') {
   const sessionId = createSession(userId, 'ladder', {
     stake,
     wallet,
+    stonesPerRow,
     currentRow: 0,
-    rowSeeds: Array.from({ length: TOTAL_ROWS }, () => Math.floor(Math.random() * 100)),
   });
 
   return { ok: true, sessionId, balance: result.balance, totalRows: TOTAL_ROWS, platformsPerRow: PLATFORMS_PER_ROW };
 }
 
 /**
+ * Сгенерировать позиции камней для ряда.
+ * @param {number} row - номер ряда (0-based)
+ * @param {number} platform - выбранная платформа
+ * @param {number} stoneCount - количество камней
+ * @param {boolean} isSafe - безопасен ли выбранный платформ
+ * @returns {number[]} - массив индексов камней
+ */
+function generateStones(row, platform, stoneCount, isSafe) {
+  const platforms = PLATFORMS_PER_ROW[row];
+  const stonePositions = [];
+
+  if (!isSafe) {
+    // Камень НА выбранной платформе + остальные случайные
+    stonePositions.push(platform);
+    const others = Array.from({ length: platforms }, (_, i) => i).filter(i => i !== platform);
+    for (let i = others.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+    stonePositions.push(...others.slice(0, stoneCount - 1));
+  } else {
+    // Камни НЕ на выбранной платформе
+    const others = Array.from({ length: platforms }, (_, i) => i).filter(i => i !== platform);
+    for (let i = others.length - 1; i > 0; i--) {
+      const j = crypto.randomInt(0, i + 1);
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+    stonePositions.push(...others.slice(0, stoneCount));
+  }
+
+  return stonePositions;
+}
+
+/**
  * Сделать шаг на платформу.
  * @param {string} sessionId
  * @param {number} platform - индекс выбранной платформы
- * @returns {{ ok: bool, safe?: bool, row?, multiplier?, error? }}
+ * @param {number} userId - для проверки владельца сессии
+ * @returns {{ ok: bool, safe?: bool, row?, stones?, multiplier?, nextMultiplier?, error? }}
  */
-function step(sessionId, platform) {
+function step(sessionId, platform, userId) {
   const session = getSession(sessionId);
   if (!session) return { ok: false, error: 'session_not_found' };
+
+  // Проверка владельца сессии
+  if (session.userId !== userId) return { ok: false, error: 'forbidden' };
 
   const row = session.currentRow;
   if (row >= TOTAL_ROWS) return { ok: false, error: 'game_finished' };
@@ -74,19 +117,27 @@ function step(sessionId, platform) {
   const count = PLATFORMS_PER_ROW[row];
   if (platform < 0 || platform >= count) return { ok: false, error: 'invalid_platform' };
 
-  // Детерминированная безопасная платформа для этого ряда
-  const safeSlot = session.rowSeeds[row] % count;
-  const isSafe = platform === safeSlot;
+  const stonesPerRow = session.stonesPerRow || 3;
+
+  // Определить — безопасна ли платформа (случайно для каждого шага)
+  // Вероятность безопасного шага: (platforms - stones) / platforms
+  const safeProbability = (count - stonesPerRow) / count;
+  const rnd = crypto.randomInt(0, count);
+  const isSafe = rnd >= stonesPerRow;
+
+  // Генерируем позиции камней
+  const stones = generateStones(row, platform, stonesPerRow, isSafe);
 
   if (!isSafe) {
-    addGame(session.userId, 'ladder', session.stake, 'lose', 0, calcMultiplier(row));
+    addGame(session.userId, 'ladder', session.stake, 'lose', 0, calcMultiplier(row, stonesPerRow));
     deleteSession(sessionId);
-    return { ok: true, safe: false, row, safeSlot };
+    return { ok: true, safe: false, row, stones, multiplier: calcMultiplier(row, stonesPerRow) };
   }
 
   const newRow = row + 1;
   updateSession(sessionId, { currentRow: newRow });
-  const multiplier = calcMultiplier(newRow);
+  const multiplier = calcMultiplier(newRow, stonesPerRow);
+  const nextMultiplier = newRow < TOTAL_ROWS ? calcMultiplier(newRow + 1, stonesPerRow) : null;
 
   const finished = newRow >= TOTAL_ROWS;
   if (finished) {
@@ -101,20 +152,26 @@ function step(sessionId, platform) {
     }
     addGame(session.userId, 'ladder', session.stake, 'win', winnings, multiplier);
     deleteSession(sessionId);
-    return { ok: true, safe: true, row: newRow, multiplier, finished: true, winnings, balance: newBalance };
+    return { ok: true, safe: true, row: newRow, stones, multiplier, nextMultiplier: null, finished: true, winnings, balance: newBalance };
   }
 
-  return { ok: true, safe: true, row: newRow, multiplier };
+  return { ok: true, safe: true, row: newRow, stones, multiplier, nextMultiplier };
 }
 
 /**
  * Забрать выигрыш в любой момент.
+ * @param {string} sessionId
+ * @param {number} userId - для проверки владельца сессии
  */
-function cashout(sessionId) {
+function cashout(sessionId, userId) {
   const session = getSession(sessionId);
   if (!session) return { ok: false, error: 'session_not_found' };
 
-  const multiplier = calcMultiplier(session.currentRow);
+  // Проверка владельца сессии
+  if (session.userId !== userId) return { ok: false, error: 'forbidden' };
+
+  const stonesPerRow = session.stonesPerRow || 3;
+  const multiplier = calcMultiplier(session.currentRow, stonesPerRow);
   const winnings = session.currentRow === 0
     ? session.stake
     : Math.round(session.stake * multiplier * 100) / 100;

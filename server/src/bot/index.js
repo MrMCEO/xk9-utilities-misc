@@ -144,10 +144,24 @@ function createBot() {
   bot.callbackQuery('admin_stats', cbAdminStats);
   bot.callbackQuery('admin_users', cbAdminUsers);
   bot.callbackQuery(/^admin_users_page_\d+$/, cbAdminUsersPage);
-  bot.callbackQuery('admin_balance', cbAdminBalance);
-  bot.callbackQuery('admin_broadcast', cbAdminBroadcast);
+
+  // При входе в FSM — очищаем все остальные FSM во избежание конфликтов
+  bot.callbackQuery('admin_balance', async (ctx) => {
+    const userId = ctx.from.id;
+    clearBroadcastFsm(userId); clearPromoFsm(userId); donateFsm.delete(userId);
+    return cbAdminBalance(ctx);
+  });
+  bot.callbackQuery('admin_broadcast', async (ctx) => {
+    const userId = ctx.from.id;
+    clearBalanceFsm(userId); clearPromoFsm(userId); donateFsm.delete(userId);
+    return cbAdminBroadcast(ctx);
+  });
   bot.callbackQuery('admin_promos', cbAdminPromos);
-  bot.callbackQuery('admin_create_promo', cbAdminCreatePromo);
+  bot.callbackQuery('admin_create_promo', async (ctx) => {
+    const userId = ctx.from.id;
+    clearBalanceFsm(userId); clearBroadcastFsm(userId); donateFsm.delete(userId);
+    return cbAdminCreatePromo(ctx);
+  });
   bot.callbackQuery('admin_maintenance', cbAdminMaintenance);
   bot.callbackQuery('admin_top', cbAdminTop);
   bot.callbackQuery('admin_back', adminBack);
@@ -156,6 +170,9 @@ function createBot() {
 
   // ===== Callback кнопки (Donate) =====
   bot.callbackQuery('donate_custom', async (ctx) => {
+    // При входе в FSM — очищаем все остальные FSM
+    const userId = ctx.from.id;
+    clearBalanceFsm(userId); clearBroadcastFsm(userId); clearPromoFsm(userId);
     // Выставить FSM-ожидание произвольной суммы
     donateFsm.set(ctx.from.id, { step: 'waiting_amount' });
     await ctx.reply(

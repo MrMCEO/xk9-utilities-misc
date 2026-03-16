@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const { BOT_TOKEN } = require('../config');
 
-const INIT_DATA_MAX_AGE = 300; // секунд
+const INIT_DATA_MAX_AGE = 86400; // секунд (24 часа — initData не обновляется при каждом запросе)
 
 /**
  * Верифицировать Telegram initData через HMAC-SHA256.
@@ -15,7 +15,7 @@ const INIT_DATA_MAX_AGE = 300; // секунд
  * 3. secret_key = HMAC-SHA256(BOT_TOKEN, "WebAppData")
  * 4. expected = HMAC-SHA256(secret_key, data_check_string)
  * 5. Сравниваем expected с hash (constant-time)
- * 6. Проверяем auth_date (не старше 5 минут)
+ * 6. Проверяем auth_date (не старше 24 часов, допуск -30 сек на clock skew)
  */
 function verifyInitData(initData) {
   try {
@@ -45,7 +45,9 @@ function verifyInitData(initData) {
     }
 
     const authDate = parseInt(params['auth_date'] || '0', 10);
-    if (Math.abs(Date.now() / 1000 - authDate) > INIT_DATA_MAX_AGE) {
+    // Допуск -30 сек на clock skew; максимальный возраст — 24 часа
+    const age = Date.now() / 1000 - authDate;
+    if (age < -30 || age > INIT_DATA_MAX_AGE) {
       return null;
     }
 

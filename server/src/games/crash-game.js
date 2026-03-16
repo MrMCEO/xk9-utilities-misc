@@ -104,6 +104,10 @@ class CrashGame {
     const mult = this.multiplier;
     const winnings = Math.round(bet.stake * mult * 100) / 100;
 
+    // Устанавливаем флаг ДО зачисления — защита от двойного кешаута
+    bet.cashedOut = true;
+    bet.cashoutMult = mult;
+
     const useDonate = bet.wallet === 'donate';
     let newBalance;
     if (useDonate) {
@@ -112,8 +116,6 @@ class CrashGame {
       newBalance = updateBalance(telegramId, winnings);
     }
 
-    bet.cashedOut = true;
-    bet.cashoutMult = mult;
     addGame(telegramId, 'crash', bet.stake, 'win', winnings, mult);
 
     return { ok: true, multiplier: mult, winnings, balance: newBalance };

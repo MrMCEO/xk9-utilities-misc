@@ -23,6 +23,11 @@ function calcMultiplier(elapsedSec) {
  * @returns {{ ok: bool, sessionId?, error?, balance? }}
  */
 function start(userId, stake, wallet = 'main') {
+  // Валидация ставки
+  if (!Number.isFinite(stake) || stake <= 0) {
+    return { ok: false, error: 'invalid_stake' };
+  }
+
   // Атомарно списываем ставку
   const useDonate = wallet === 'donate';
   let result;
@@ -53,14 +58,20 @@ function start(userId, stake, wallet = 'main') {
 /**
  * Забрать выигрыш.
  * @param {string} sessionId
+ * @param {number} userId - для проверки владельца сессии
  * @returns {{ ok: bool, multiplier?, winnings?, balance?, error? }}
  */
-function cashout(sessionId) {
+function cashout(sessionId, userId) {
   const session = getSession(sessionId);
   if (!session) return { ok: false, error: 'session_not_found' };
 
-  const elapsed = (Date.now() - session.startTime) / 1000;
-  const multiplier = Math.min(MAX_MULTIPLIER, calcMultiplier(elapsed));
+  // Проверка владельца сессии
+  if (session.userId !== userId) return { ok: false, error: 'forbidden' };
+
+  let elapsed = (Date.now() - session.startTime) / 1000;
+  // Защита от отрицательного elapsed (clock skew)
+  if (elapsed < 0) elapsed = 0;
+  const multiplier = Math.max(1.0, Math.min(MAX_MULTIPLIER, calcMultiplier(elapsed)));
 
   // Краш произошёл до кешаута
   if (multiplier >= session.crashAt) {

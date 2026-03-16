@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { createSession, getSession, deleteSession, updateSession } = require('./session-store');
 const { updateBalanceChecked, updateDonateBalanceChecked, updateBalance, updateDonateBalance } = require('../db/users');
 const { addGame } = require('../db/games');
@@ -7,14 +8,14 @@ const { addGame } = require('../db/games');
 const GRID_SIZE = 36; // 6x6
 
 /**
- * Расставить мины (Fisher-Yates shuffle).
+ * Расставить мины (Fisher-Yates shuffle с crypto.randomInt).
  * @param {number} mineCount
  * @returns {Set<number>} — множество индексов мин
  */
 function placeMines(mineCount) {
   const cells = Array.from({ length: GRID_SIZE }, (_, i) => i);
   for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = crypto.randomInt(0, i + 1);
     [cells[i], cells[j]] = [cells[j], cells[i]];
   }
   return new Set(cells.slice(0, mineCount));
@@ -40,6 +41,11 @@ function calcMultiplier(opened, mineCount) {
  * Начать игру в Сапёра.
  */
 function start(userId, stake, wallet = 'main', mineCount = 5) {
+  // Валидация ставки
+  if (!Number.isFinite(stake) || stake <= 0) {
+    return { ok: false, error: 'invalid_stake' };
+  }
+
   mineCount = Math.max(1, Math.min(30, mineCount));
 
   const useDonate = wallet === 'donate';
@@ -68,11 +74,17 @@ function start(userId, stake, wallet = 'main', mineCount = 5) {
 
 /**
  * Нажать на клетку.
+ * @param {string} sessionId
+ * @param {number} cellIndex
+ * @param {number} userId - для проверки владельца сессии
  * @returns {{ ok: bool, hit?: bool, multiplier?, opened?, error? }}
  */
-function tap(sessionId, cellIndex) {
+function tap(sessionId, cellIndex, userId) {
   const session = getSession(sessionId);
   if (!session) return { ok: false, error: 'session_not_found' };
+
+  // Проверка владельца сессии
+  if (session.userId !== userId) return { ok: false, error: 'forbidden' };
 
   if (cellIndex < 0 || cellIndex >= GRID_SIZE) return { ok: false, error: 'invalid_cell' };
   if (session.opened.includes(cellIndex)) return { ok: false, error: 'already_opened' };
@@ -96,10 +108,16 @@ function tap(sessionId, cellIndex) {
 
 /**
  * Забрать выигрыш.
+ * @param {string} sessionId
+ * @param {number} userId - для проверки владельца сессии
  */
-function cashout(sessionId) {
+function cashout(sessionId, userId) {
   const session = getSession(sessionId);
   if (!session) return { ok: false, error: 'session_not_found' };
+
+  // Проверка владельца сессии
+  if (session.userId !== userId) return { ok: false, error: 'forbidden' };
+
   if (session.opened.length === 0) {
     // Ничего не открыто — возвращаем ставку
     const useDonate = session.wallet === 'donate';
@@ -109,6 +127,7 @@ function cashout(sessionId) {
     } else {
       newBalance = updateBalance(session.userId, session.stake);
     }
+    addGame(session.userId, 'minesweeper', session.stake, 'draw', session.stake, 1.0);
     deleteSession(sessionId);
     return { ok: true, multiplier: 1.0, winnings: session.stake, balance: newBalance };
   }

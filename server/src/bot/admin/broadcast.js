@@ -13,8 +13,7 @@ async function cbAdminBroadcast(ctx) {
   if (!requireAdmin(ctx)) return;
   broadcastFsm.set(ctx.from.id, { step: 'waiting_text' });
   await ctx.editMessageText(
-    '📢 <b>Рассылка</b>\n\nВведите текст сообщения для всех пользователей (HTML-разметка поддерживается):',
-    { parse_mode: 'HTML' }
+    '📢 Рассылка\n\nВведите текст сообщения для всех пользователей:',
   );
   await ctx.answerCallbackQuery();
 }
@@ -22,6 +21,7 @@ async function cbAdminBroadcast(ctx) {
 /**
  * Обработчик FSM рассылки.
  * Возвращает true если сообщение обработано.
+ * Использует cursor-based пагинацию (по 100 пользователей).
  */
 async function handleBroadcastFsm(ctx) {
   if (!ADMIN_IDS.includes(ctx.from.id)) return false;
@@ -36,26 +36,37 @@ async function handleBroadcastFsm(ctx) {
 
   broadcastFsm.delete(ctx.from.id);
 
-  const users = getAllUsers(100000);
-  let sent = 0, failed = 0;
+  // Подсчитать общее количество (первая страница для отображения)
+  const firstPage = getAllUsers(1, 0);
+  await ctx.reply(`📢 Начинаю рассылку...`);
 
-  await ctx.reply(`📢 Начинаю рассылку для ${users.length} пользователей...`);
+  let sent = 0, failed = 0, offset = 0;
+  const PAGE_SIZE = 100;
 
-  for (const user of users) {
-    if (user.is_banned) continue;
-    try {
-      await ctx.api.sendMessage(user.telegram_id, text, { parse_mode: 'HTML' });
-      sent++;
-    } catch {
-      failed++;
+  // cursor-based пагинация: читаем по 100 юзеров за раз
+  while (true) {
+    const users = getAllUsers(PAGE_SIZE, offset);
+    if (!users.length) break;
+
+    for (const user of users) {
+      if (user.is_banned) continue;
+      try {
+        await ctx.api.sendMessage(user.telegram_id, text);
+        sent++;
+      } catch {
+        failed++;
+      }
+      // throttle: ~20 сообщений/сек
+      await new Promise(r => setTimeout(r, 50));
     }
-    // throttle: ~20 сообщений/сек
-    await new Promise(r => setTimeout(r, 50));
+
+    offset += PAGE_SIZE;
+    if (users.length < PAGE_SIZE) break;
   }
 
   await ctx.reply(
-    `📢 <b>Рассылка завершена</b>\n\n✅ Отправлено: ${sent}\n❌ Не доставлено: ${failed}`,
-    { reply_markup: getAdminKeyboard(), parse_mode: 'HTML' }
+    `📢 Рассылка завершена\n\n✅ Отправлено: ${sent}\n❌ Не доставлено: ${failed}`,
+    { reply_markup: getAdminKeyboard() }
   );
   return true;
 }

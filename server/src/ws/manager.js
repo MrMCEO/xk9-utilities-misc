@@ -3,8 +3,9 @@
 const { WebSocketServer } = require('ws');
 const { CrashGame } = require('../games/crash-game');
 const { verifyInitData } = require('../api/auth');
+const { getUser } = require('../db/users');
 
-// Map<ws, { telegramId: number }>
+// Map<ws, { telegramId: number, msgCount: number, lastReset: number }>
 const clients = new Map();
 
 let crashGame = null;
@@ -18,7 +19,7 @@ function initWsServer(server) {
   crashGame.start();
 
   wss.on('connection', (ws, req) => {
-    clients.set(ws, { telegramId: null });
+    clients.set(ws, { telegramId: null, msgCount: 0, lastReset: Date.now() });
 
     // Отправить текущее состояние новому клиенту
     ws.send(JSON.stringify({ type: 'state', ...crashGame.getState() }));
@@ -36,39 +37,69 @@ function initWsServer(server) {
   return wss;
 }
 
+/** Безопасная отправка сообщения клиенту */
+function send(ws, data) {
+  if (ws.readyState === 1 /* OPEN */) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
 /** Обработка входящих сообщений от клиента */
 function handleMessage(ws, msg) {
+  const info = clients.get(ws);
+  if (!info) return;
+
+  // Rate limiting: максимум 20 сообщений в секунду
+  const now = Date.now();
+  if (now - info.lastReset > 1000) { info.msgCount = 0; info.lastReset = now; }
+  info.msgCount++;
+  if (info.msgCount > 20) {
+    send(ws, { type: 'error', error: 'rate_limited' });
+    return;
+  }
+
   const { type } = msg;
 
   if (type === 'auth') {
     // Аутентификация через Telegram initData
     const user = verifyInitData(msg.initData || '');
     if (!user) {
-      ws.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
+      send(ws, { type: 'error', error: 'unauthorized' });
       return;
     }
-    const info = clients.get(ws) || {};
     info.telegramId = user.id;
     clients.set(ws, info);
-    ws.send(JSON.stringify({ type: 'auth_ok', userId: user.id }));
+    send(ws, { type: 'auth_ok', userId: user.id });
     return;
   }
 
-  const info = clients.get(ws);
-  if (!info || !info.telegramId) {
-    ws.send(JSON.stringify({ type: 'error', error: 'not_authenticated' }));
+  if (!info.telegramId) {
+    send(ws, { type: 'error', error: 'not_authenticated' });
     return;
   }
 
   if (type === 'bet') {
-    const result = crashGame.placeBet(info.telegramId, parseFloat(msg.stake), msg.wallet || 'main');
-    ws.send(JSON.stringify({ type: 'bet_result', ...result }));
+    const stake = parseFloat(msg.stake);
+    if (!Number.isFinite(stake) || stake <= 0) {
+      send(ws, { type: 'error', error: 'invalid_stake' });
+      return;
+    }
+
+    // Проверка бана
+    const user = getUser(info.telegramId);
+    if (user && user.is_banned) {
+      send(ws, { type: 'error', error: 'banned' });
+      return;
+    }
+
+    const result = crashGame.placeBet(info.telegramId, stake, msg.wallet || 'main');
+    send(ws, { type: 'bet_result', ...result });
     return;
   }
 
   if (type === 'cashout') {
     const result = crashGame.cashout(info.telegramId);
-    ws.send(JSON.stringify({ type: 'cashout_result', ...result }));
+    send(ws, { type: 'cashout_result', ...result });
     return;
   }
 }
