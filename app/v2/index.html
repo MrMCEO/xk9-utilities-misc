@@ -6,6 +6,12 @@
     <title>BFG</title>
     <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
 
+    <!-- API / WebSocket endpoints (заменить на свой домен в продакшене) -->
+    <script>
+      window.API_URL = 'https://bfg-casino.loca.lt';
+      window.MP_CRASH_WS_URL = 'wss://bfg-casino.loca.lt/ws/crash';
+    </script>
+
     <!-- CSS-слои: токены → база → компоненты → игры → админ -->
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/base.css">
