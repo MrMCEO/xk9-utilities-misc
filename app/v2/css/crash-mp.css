@@ -64,3 +64,4 @@
 }
 .crash-mp-status.waiting { background:var(--gold-lo); color:var(--gold); border-color:rgba(245,166,35,0.3); }
 .crash-mp-status.crashed { background:var(--red-lo); color:var(--red); border-color:rgba(255,68,85,0.3); }
+.crash-mp-status.running { background:var(--green); color:#fff; border-color:var(--green); }

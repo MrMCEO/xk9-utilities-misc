@@ -20,6 +20,9 @@ const Mine = {
 
 export const mHistData = [];
 
+/** Экспорт состояния активной игры для app.js */
+export function isMineActive() { return Mine.active; }
+
 /* ── Расчёт множителя (только для отображения hints) ── */
 function mCalcMult(opened) {
     if (opened === 0) return 1.0;
@@ -39,6 +42,8 @@ function mBuildGrid() {
         const c = document.createElement('div');
         c.className = 'm-cell hidden';
         c.dataset.i = i;
+        c.setAttribute('role', 'gridcell');
+        c.setAttribute('aria-label', 'Ячейка ' + (i + 1));
         frag.appendChild(c);
     }
     g.appendChild(frag);
@@ -92,6 +97,8 @@ async function mStart() {
     }
 
     const startBtn = document.getElementById('mStartBtn');
+    const origText = startBtn.textContent;
+    startBtn.textContent = 'Загрузка...';
     startBtn.disabled = true;
 
     try {
@@ -124,6 +131,7 @@ async function mStart() {
     } catch(err) {
         openModal('⚠️', 'Ошибка', 'Не удалось начать игру', err.message || 'Проблема с сетью', null);
     } finally {
+        startBtn.textContent = origText;
         startBtn.disabled = false;
     }
 }
@@ -133,6 +141,10 @@ async function mTap(idx) {
     if (!Mine.active) return;
     if (Mine.safe.has(idx)) return;
 
+    /* Оптимистичный UI — сразу показать состояние "нажато" */
+    const cell = mCell(idx);
+    if (cell) cell.classList.add('m-pending');
+
     /* Блокируем сетку на время запроса */
     document.getElementById('mGrid').classList.remove('playing');
 
@@ -140,6 +152,8 @@ async function mTap(idx) {
         const data = await fetchAPI('/api/minesweeper/tap', {
             sessionId: Mine.sessionId, cell: idx
         });
+
+        if (cell) cell.classList.remove('m-pending');
 
         if (data.hit) {
             /* Мина */
@@ -167,6 +181,7 @@ async function mTap(idx) {
 
     } catch(err) {
         /* Восстановить состояние */
+        if (cell) cell.classList.remove('m-pending');
         if (Mine.active) document.getElementById('mGrid').classList.add('playing');
         openModal('⚠️', 'Ошибка', 'Не удалось обработать ход', err.message || 'Проблема с сетью', null);
     }
@@ -221,7 +236,7 @@ async function mCashout() {
         pushHistory(mHistData, 'mHistory', true, '💎 x' + finalMult.toFixed(2));
         sndWin();
         openModal('💎', 'Выигрыш!', 'x' + finalMult.toFixed(2) + ' · Открыто: ' + Mine.safe.size, '+' + fmtFull(profit), true);
-        setTimeout(closeModal, 1500);
+        setTimeout(closeModal, 3000);
         mResetUI();
 
     } catch(err) {

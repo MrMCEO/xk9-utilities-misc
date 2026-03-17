@@ -5,14 +5,19 @@
  */
 
 import { renderBalances, setActiveWallet, activeWallet, initBalanceFromUrl, initDonateFromUrl } from './balance.js';
-import { applyRipples, initModalBindings, haptic } from './ui.js';
+import { applyRipples, initModalBindings, haptic, openModal } from './ui.js';
 import { initDeposit }  from './deposit.js';
 import { initAdmin }    from './admin.js';
 
 /* Импортируем игровые модули для их side-effect инициализации */
-import './rocket.js';
-import './minesweeper.js';
-import './ladder.js';
+import { isRocketActive } from './rocket.js';
+import { isMineActive }   from './minesweeper.js';
+import { isLadderActive } from './ladder.js';
+
+/** Проверить, активна ли хоть одна игра */
+function isAnyGameActive() {
+    return isRocketActive() || isMineActive() || isLadderActive();
+}
 
 /* MP Краш подключается только если присутствует экран */
 if (document.getElementById('screenCrashMp')) {
@@ -68,10 +73,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
         if (tab === curTab) return;
+
+        /* Предупреждение при активной игре */
+        if (isAnyGameActive()) {
+            openModal('⚠️', 'Внимание', 'У вас активная игра! Переключение вкладки не остановит её.', '', null);
+        }
+
         document.getElementById(tabMap[curTab])?.classList.remove('active');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+        });
         curTab = tab;
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         document.getElementById(tabMap[tab])?.classList.add('active');
         haptic('light');
     });
@@ -125,3 +140,13 @@ document.addEventListener('click', () => {
         window._audioCtx.resume();
     }
 }, { once: true });
+
+/* ════════════════════════════════════
+   ПРЕДУПРЕЖДЕНИЕ ПРИ УХОДЕ С АКТИВНОЙ ИГРЫ
+════════════════════════════════════ */
+window.addEventListener('beforeunload', (e) => {
+    if (isAnyGameActive()) {
+        e.preventDefault();
+        e.returnValue = 'У вас активная игра!';
+    }
+});

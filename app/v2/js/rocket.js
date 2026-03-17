@@ -25,6 +25,9 @@ const R = {
     }
 };
 
+/** Экспорт состояния активной игры для app.js */
+export function isRocketActive() { return R.active; }
+
 const html = document.documentElement;
 const rCtx = R.els.canvas.getContext('2d', { alpha: false });
 
@@ -219,6 +222,8 @@ async function rStart() {
     }
 
     /* Блокируем кнопку на время запроса */
+    const origText = R.els.btn.textContent;
+    R.els.btn.textContent = 'Загрузка...';
     R.els.btn.disabled = true;
     R.els.betInput.disabled = true;
 
@@ -247,6 +252,7 @@ async function rStart() {
         R.frame = requestAnimationFrame(rLoop);
 
     } catch(err) {
+        R.els.btn.textContent   = origText;
         R.els.btn.disabled      = false;
         R.els.betInput.disabled = false;
         openModal('⚠️', 'Ошибка', 'Не удалось начать игру', err.message || 'Проблема с сетью', null);
@@ -289,7 +295,7 @@ async function rCashout() {
             R.els.mult.textContent = 'x' + finalMult.toFixed(2);
             setTimeout(() => {
                 openModal('🎉', 'Победа!', 'Множитель x' + finalMult.toFixed(2), '+' + fmtFull(profit), true);
-                setTimeout(closeModal, 1500);
+                setTimeout(closeModal, 3000);
             }, 200);
         } else {
             /* Краш произошёл до нашего кешаута */

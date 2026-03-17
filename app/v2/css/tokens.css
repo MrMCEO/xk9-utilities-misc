@@ -2,11 +2,13 @@
    TOKENS — CSS-переменные и темы (dark/light)
 ═══════════════════════════════════════════════════ */
 :root {
-    --brand:      #3d5afe;
-    --brand2:     #2840cc;
-    --brand-lo:   rgba(61,90,254,0.12);
-    --brand-mid:  rgba(61,90,254,0.24);
-    --brand-hi:   rgba(61,90,254,0.48);
+    --brand:        #3d5afe;
+    --brand2:       #2840cc;
+    --brand-lo:     rgba(61,90,254,0.12);
+    --brand-mid:    rgba(61,90,254,0.24);
+    --brand-hi:     rgba(61,90,254,0.48);
+    --brand-shadow: rgba(61,90,254,0.4);
+    --brand-border: rgba(61,90,254,0.45);
     --gold:       #f5a623;
     --gold-lo:    rgba(245,166,35,0.15);
     --green:      #00e676;
@@ -36,6 +38,8 @@
 
 /* LIGHT */
 [data-theme="light"] {
+    --brand-shadow: rgba(61,90,254,0.25);
+    --brand-border: rgba(61,90,254,0.30);
     --bg:        #dae8ff;
     --bg2:       #c6d8f8;
     --card:      rgba(255,255,255,0.60);

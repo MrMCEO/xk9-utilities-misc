@@ -22,6 +22,9 @@ const LD = {
 
 export const lHistData = [];
 
+/** Экспорт состояния активной игры для app.js */
+export function isLadderActive() { return LD.active; }
+
 const LDel = {
     get mult()     { return document.getElementById('lMult'); },
     get rowLbl()   { return document.getElementById('lRow'); },
@@ -46,8 +49,14 @@ function ldCumul(upToRow) {
     return m;
 }
 
+/* ── Кэш DOM-элементов сетки ── */
+const rowCache  = new Map();
+const cellCache = new Map();
+
 /* ── Построить сетку ── */
 function ldBuildGrid() {
+    rowCache.clear();
+    cellCache.clear();
     const g = LDel.grid;
     g.innerHTML = '';
     for (let r = LD_ROWS - 1; r >= 0; r--) {
@@ -66,6 +75,8 @@ function ldBuildGrid() {
             cell.className = 'l-cell';
             cell.dataset.r = r;
             cell.dataset.p = p;
+            cell.setAttribute('role', 'button');
+            cell.setAttribute('aria-label', 'Платформа ' + (p + 1) + ', ряд ' + (r + 1));
             row.appendChild(cell);
         }
         g.appendChild(row);
@@ -78,8 +89,19 @@ function ldBuildGrid() {
     requestAnimationFrame(() => { g.scrollTop = g.scrollHeight; });
 }
 
-function ldGetRow(r)    { return LDel.grid.querySelector(`.ladder-row[data-row="${r}"]`); }
-function ldGetCell(r,p) { return LDel.grid.querySelector(`.ladder-row[data-row="${r}"] .l-cell[data-p="${p}"]`); }
+function ldGetRow(r) {
+    if (rowCache.has(r)) return rowCache.get(r);
+    const el = LDel.grid.querySelector(`.ladder-row[data-row="${r}"]`);
+    if (el) rowCache.set(r, el);
+    return el;
+}
+function ldGetCell(r, p) {
+    const key = `${r}_${p}`;
+    if (cellCache.has(key)) return cellCache.get(key);
+    const el = LDel.grid.querySelector(`.ladder-row[data-row="${r}"] .l-cell[data-p="${p}"]`);
+    if (el) cellCache.set(key, el);
+    return el;
+}
 
 function ldSetStates(activeRow) {
     for (let r = 0; r < LD_ROWS; r++) {
@@ -201,7 +223,7 @@ function ldWin(topReached) {
     pushHistory(lHistData, 'lHistory', true, '🎉 x' + LD.mult.toFixed(2));
     sndWin();
     openModal('🎉', 'Победа!', sub, '+' + fmtFull(profit), true);
-    setTimeout(closeModal, 1500);
+    setTimeout(closeModal, 3000);
     ldResetUI();
 }
 
@@ -245,6 +267,8 @@ async function ldStart() {
     }
 
     const startBtn = document.getElementById('lStartBtn');
+    const origText = startBtn.textContent;
+    startBtn.textContent = 'Загрузка...';
     startBtn.disabled = true;
 
     try {
@@ -275,6 +299,7 @@ async function ldStart() {
     } catch(err) {
         openModal('⚠️', 'Ошибка', 'Не удалось начать игру', err.message || 'Проблема с сетью', null);
     } finally {
+        startBtn.textContent = origText;
         startBtn.disabled = false;
     }
 }

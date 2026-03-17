@@ -11,6 +11,7 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
+    height: 100vh;
     height: 100dvh;
     display: flex;
     flex-direction: column;
@@ -44,6 +45,7 @@ body>* { position:relative; z-index:1; }
     padding: 0 16px;
     background: var(--bg2);
     border-bottom: 1px solid var(--border);
+    -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     z-index: 50;
     transition: var(--tr);
@@ -61,7 +63,7 @@ body>* { position:relative; z-index:1; }
 .balance-block { text-align:right; }
 
 .bal-label {
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 1.3px;
     color: var(--muted);
@@ -218,6 +220,7 @@ main { flex:1; overflow:hidden; position:relative; }
     border-radius:var(--r);
     padding:12px;
     margin-bottom:10px;
+    -webkit-backdrop-filter:blur(12px);
     backdrop-filter:blur(12px);
     transition:var(--tr);
 }
@@ -259,6 +262,16 @@ main { flex:1; overflow:hidden; position:relative; }
     transition:var(--tr), transform .1s;
 }
 .qb:active { background:var(--brand-lo); border-color:var(--brand-hi); transform:scale(0.87); }
+
+/* ═══════════════════════════════════════════════════
+   ADAPTIVE — narrow screens (≤ 360px width)
+═══════════════════════════════════════════════════ */
+@media (max-width: 360px) {
+    .header { flex-wrap: wrap; gap: 4px; padding: 6px 8px; }
+    .deposit-btn { font-size: 10px; padding: 0 8px; }
+    .bal-wrap { gap: 4px; }
+    .bal-label { display: none; }
+}
 
 /* ═══════════════════════════════════════════════════
    ADAPTIVE — small Telegram windows (< 580px height)
@@ -332,12 +345,13 @@ main { flex:1; overflow:hidden; position:relative; }
     background:var(--card); border:1px solid var(--border);
     border-radius:var(--r); padding:9px 6px;
     text-align:center; transition:var(--tr);
+    -webkit-backdrop-filter:blur(8px);
     backdrop-filter:blur(8px);
 }
 [data-theme="dark"]  .stat-chip { box-shadow:inset 0 1px 0 rgba(255,255,255,0.04); }
 [data-theme="light"] .stat-chip { box-shadow:0 2px 8px rgba(61,90,200,0.06); }
 
-.stat-lbl { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:3px; transition:var(--tr); }
+.stat-lbl { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:3px; transition:var(--tr); }
 
 .stat-val {
     font-size:20px; font-weight:800; color:var(--brand);

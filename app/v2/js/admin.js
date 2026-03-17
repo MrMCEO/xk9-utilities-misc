@@ -43,6 +43,7 @@ export function initAdmin(curTabRef, tabMap) {
     }
 
     function closeAdmin() {
+        if (adminObserver) { adminObserver.disconnect(); adminObserver = null; }
         document.getElementById('screenAdmin').classList.remove('active');
         document.querySelector('.tab-bar').style.display = '';
         const tabId = tabMap[prevTab] || tabMap.rocket;
@@ -64,6 +65,7 @@ export function initAdmin(curTabRef, tabMap) {
 
     /* ── Activity Chart ── */
     const html = document.documentElement;
+    let adminObserver = null;
 
     function drawChart() {
         const canvas = document.getElementById('adminChart');
@@ -107,15 +109,16 @@ export function initAdmin(curTabRef, tabMap) {
         }
 
         ctx.fillStyle  = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
-        ctx.font       = '9px -apple-system, sans-serif';
+        ctx.font       = '10px -apple-system, sans-serif';
         ctx.textAlign  = 'center';
         for (let i = 0; i < 24; i += 4) {
             ctx.fillText(i + 'ч', 24 + i * barW + barW / 2, h - 4);
         }
     }
 
-    new MutationObserver(() => requestAnimationFrame(drawChart))
-        .observe(html, { attributes: true, attributeFilter: ['data-theme'] });
+    if (adminObserver) adminObserver.disconnect();
+    adminObserver = new MutationObserver(() => requestAnimationFrame(drawChart));
+    adminObserver.observe(html, { attributes: true, attributeFilter: ['data-theme'] });
     requestAnimationFrame(drawChart);
 
     /* ── XSS escaping ── */

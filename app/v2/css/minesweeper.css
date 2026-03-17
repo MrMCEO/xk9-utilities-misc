@@ -92,6 +92,14 @@
     font-size:18px; opacity:.55;
 }
 
+/* Optimistic UI — ячейка нажата, ждём ответа сервера */
+.m-cell.m-pending {
+    opacity: 0.6;
+    transform: scale(0.95);
+    pointer-events: none;
+    transition: opacity .1s, transform .1s;
+}
+
 @keyframes rSafe {
     0%{transform:scale(0.4) rotate(-18deg);opacity:0}
     65%{transform:scale(1.14) rotate(4deg)}

@@ -33,16 +33,16 @@
             </div>
         </div>
         <button class="deposit-btn" id="depositBtn" title="Пополнить баланс">+ Пополнить</button>
-        <button class="admin-btn" id="adminBtn" title="Admin Panel">⚙</button>
-        <button class="theme-btn" id="themeBtn">🌙</button>
+        <button class="admin-btn" id="adminBtn" title="Admin Panel" aria-label="Админ-панель">⚙</button>
+        <button class="theme-btn" id="themeBtn" aria-label="Переключить тему">🌙</button>
     </div>
 </header>
 
 <!-- TABS -->
-<div class="tab-bar">
-    <button class="tab-btn active" data-tab="rocket"><span class="ti">🚀</span> Ракета</button>
-    <button class="tab-btn"        data-tab="mine">  <span class="ti">💣</span> Сапер</button>
-    <button class="tab-btn"        data-tab="ladder"><span class="ti">🪜</span> Лесенка</button>
+<div class="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="rocket" role="tab" aria-selected="true"  aria-controls="screenRocket"><span class="ti">🚀</span> Ракета</button>
+    <button class="tab-btn"        data-tab="mine"   role="tab" aria-selected="false" aria-controls="screenMine">  <span class="ti">💣</span> Сапер</button>
+    <button class="tab-btn"        data-tab="ladder" role="tab" aria-selected="false" aria-controls="screenLadder"><span class="ti">🪜</span> Лесенка</button>
 </div>
 
 <main>
@@ -69,7 +69,7 @@
             <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
         </div>
         <div class="sec-label">Ставка</div>
-        <input type="number" class="bet-input" id="rBetInput" value="100" min="1">
+        <input type="number" inputmode="decimal" class="bet-input" id="rBetInput" value="100" min="1">
         <div class="quick-bets">
             <button class="qb" data-v="50">50</button>
             <button class="qb" data-v="100">100</button>
@@ -104,7 +104,7 @@
         </div>
     </div>
 
-    <div class="mine-grid" id="mGrid"></div>
+    <div class="mine-grid" id="mGrid" role="grid" aria-label="Игровое поле сапёра"></div>
 
     <div class="next-hint" id="mNextHint" style="display:none">
         Следующая: <b id="mNextVal">x0.00</b>
@@ -134,7 +134,7 @@
                 <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
             </div>
             <div class="sec-label">Ставка</div>
-            <input type="number" class="bet-input" id="mBetInput" value="100" min="1">
+            <input type="number" inputmode="decimal" class="bet-input" id="mBetInput" value="100" min="1">
             <div class="quick-bets">
                 <button class="qb" data-v="50">50</button>
                 <button class="qb" data-v="100">100</button>
@@ -176,7 +176,7 @@
     </div>
 
     <!-- Grid (built by JS) -->
-    <div class="ladder-wrap" id="lGrid"></div>
+    <div class="ladder-wrap" id="lGrid" aria-label="Игровое поле лесенки"></div>
 
     <!-- Next row hint -->
     <div class="next-hint" id="lNextHint" style="display:none">
@@ -204,7 +204,7 @@
                 <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
             </div>
             <div class="sec-label">Ставка</div>
-            <input type="number" class="bet-input" id="lBetInput" value="100" min="1">
+            <input type="number" inputmode="decimal" class="bet-input" id="lBetInput" value="100" min="1">
             <div class="quick-bets">
                 <button class="qb" data-v="50">50</button>
                 <button class="qb" data-v="100">100</button>
@@ -318,7 +318,7 @@
             </div>
 
             <div class="deposit-manual-row">
-                <input type="number" class="deposit-input" id="depositAmtInput" placeholder="Своя сумма, ₽" min="1">
+                <input type="number" inputmode="decimal" class="deposit-input" id="depositAmtInput" placeholder="Своя сумма, ₽" min="1">
                 <button class="dep-manual-btn" id="depositManualBtn">Оплатить</button>
             </div>
         </div>
