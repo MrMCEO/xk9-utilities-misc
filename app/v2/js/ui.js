@@ -35,6 +35,102 @@ export function sndWin() {
 }
 export function sndLose() { playTone(220, 'sawtooth', 0.35, 0.08); }
 
+// Тап в сапёре — мягкий "поп"
+export function sndPop() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.1);
+    } catch(e) {}
+}
+
+// Шаг в лесенке — "степ" звук
+export function sndStep() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(500, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.12);
+    } catch(e) {}
+}
+
+// Мина — "бум" (взрыв)
+export function sndBoom() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.3);
+    } catch(e) {}
+}
+
+// Камень в лесенке — "удар" (белый шум с затуханием)
+export function sndHit() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const noise = ctx.createBufferSource();
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.15, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.05));
+        noise.buffer = buf;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        noise.connect(gain).connect(ctx.destination);
+        noise.start();
+    } catch(e) {}
+}
+
+// Ставка сделана — "ча-чинг"
+export function sndBet() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.05);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch(e) {}
+}
+
+// Milestone достигнут — "дзинь"
+export function sndMilestone() {
+    const ctx = getAudioCtx(); if (!ctx) return;
+    try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.2);
+    } catch(e) {}
+}
+
 /* ════════════════════════════════════
    HAPTIC
 ════════════════════════════════════ */

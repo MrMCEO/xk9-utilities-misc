@@ -265,6 +265,7 @@ async function rStart() {
         R.els.btn.className   = 'btn btn-green';
         R.els.mult.className  = 'mult-display';
         R.els.hint.textContent = '🚀 В полёте — нажмите чтобы забрать!';
+        sndBet();
         haptic('medium');
 
         R.frame = requestAnimationFrame(rLoop);

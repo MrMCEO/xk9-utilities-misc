@@ -4,8 +4,9 @@
  */
 
 import { fetchAPI }       from './api.js';
-import { openModal, closeModal, sndClick, sndWin, sndLose, haptic, pushHistory } from './ui.js';
+import { openModal, closeModal, sndClick, sndWin, sndLose, sndPop, sndBoom, sndBet, haptic, pushHistory } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
+import { recordGame } from './session-stats.js';
 
 const CELLS = 36;
 
@@ -126,6 +127,7 @@ async function mStart() {
         document.getElementById('mNextHint').style.display  = 'block';
         document.getElementById('mSettings').style.display  = 'none';
         document.getElementById('mGamePanel').style.display = 'block';
+        sndBet();
         haptic('medium');
 
     } catch(err) {
@@ -160,6 +162,7 @@ async function mTap(idx) {
             const c = mCell(idx);
             c.classList.replace('hidden', 'mine-hit');
             c.textContent = '💣';
+            sndBoom();
             haptic('heavy');
             await mGameOver(idx, data.mines || []);
         } else {
@@ -168,6 +171,7 @@ async function mTap(idx) {
             const c = mCell(idx);
             c.classList.replace('hidden', 'safe');
             c.textContent = '💎';
+            sndPop();
             haptic('light');
             Mine.mult = data.multiplier ?? mCalcMult(Mine.safe.size);
             mUpdateStats();
@@ -204,6 +208,7 @@ async function mGameOver(hitIdx, mineList) {
     }
 
     changeBalance(-Mine.bet);
+    recordGame(false, -Mine.bet);
 
     setTimeout(() => {
         pushHistory(mHistData, 'mHistory', false, '💣 -' + fmtFull(Mine.bet));
@@ -233,6 +238,7 @@ async function mCashout() {
         const profit    = total - Mine.bet;
 
         changeBalance(profit);
+        recordGame(true, profit);
         pushHistory(mHistData, 'mHistory', true, '💎 x' + finalMult.toFixed(2));
         sndWin();
         openModal('💎', 'Выигрыш!', 'x' + finalMult.toFixed(2) + ' · Открыто: ' + Mine.safe.size, '+' + fmtFull(profit), true);

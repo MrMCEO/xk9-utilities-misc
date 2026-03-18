@@ -4,8 +4,9 @@
  */
 
 import { fetchAPI }       from './api.js';
-import { openModal, closeModal, sndClick, sndWin, sndLose, haptic, hNotify, pushHistory } from './ui.js';
+import { openModal, closeModal, sndClick, sndWin, sndLose, sndStep, sndHit, sndBet, haptic, hNotify, pushHistory } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
+import { recordGame } from './session-stats.js';
 
 const LD_PLATFORMS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 10];
 const LD_ROWS      = 12;
@@ -168,6 +169,7 @@ async function ldTap(rowIdx, platIdx) {
         const stones   = data.stones || [];
         const isHit    = !survived;
 
+        if (survived) sndStep(); else sndHit();
         haptic(survived ? 'light' : 'heavy');
         await ldReveal(rowIdx, stones, platIdx, isHit);
 
@@ -201,6 +203,7 @@ function ldGameOver() {
     LD.active = false;
     LD.locked = false;
     changeBalance(-LD.bet);
+    recordGame(false, -LD.bet);
     hNotify('error');
     const rowReached = LD.currentRow + 1;
     pushHistory(lHistData, 'lHistory', false, '💥 r' + rowReached);
@@ -216,6 +219,7 @@ function ldWin(topReached) {
     const total  = LD.bet * LD.mult;
     const profit = total - LD.bet;
     changeBalance(profit);
+    recordGame(true, profit);
     hNotify('success');
     const sub = topReached
         ? '🏆 Покорил вершину! x' + LD.mult.toFixed(2)
@@ -294,6 +298,7 @@ async function ldStart() {
         LDel.nextHint.style.display = 'none';
         LDel.cashout.disabled       = true;
         ldUpdateStats();
+        sndBet();
         haptic('medium');
 
     } catch(err) {

@@ -1,10 +1,10 @@
 /**
- * crash-mp.js — Мультиплеерный Краш: WebSocket клиент + Canvas.
- * Логика без изменений — только вынесена в отдельный модуль.
+ * crash-mp.js — Мультиплеерный Краш: WebSocket клиент + Canvas-анимация графика.
  */
 
-import { haptic, hNotify, sndWin, sndLose, openModal, closeModal } from './ui.js';
+import { haptic, hNotify, sndWin, sndLose, sndBet, openModal, closeModal } from './ui.js';
 import { changeBalance, setBalanceFromServer, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
+import { recordGame } from './session-stats.js';
 
 /* ════════════════════════════════════════════════════════
    MP КРАШ — WebSocket клиент
@@ -12,6 +12,10 @@ import { changeBalance, setBalanceFromServer, getActiveBalance, activeWallet, fm
 
 /* ── Авто-кэшаут ── */
 let mpAutoCashoutTarget = 0;
+
+/* ── Canvas — массив точек графика ── */
+let mpChartPoints   = [];
+let mpWaitingEnd    = 0;  // timestamp окончания обратного отсчёта
 
 const MPCrash = {
     ws:         null,
@@ -133,6 +137,7 @@ function mpPhaseCrashed(msg) {
        Только показываем анимацию краша. Если сервер прислал balance — обновляем. */
     if (MPCrash.betPlaced && !MPCrash.cashedOut) {
         if (msg.balance !== undefined) setBalanceFromServer(msg.balance);
+        recordGame(false, -MPCrash.bet);
         sndLose();
         openModal('💥', 'Краш!', 'Упало на x' + crashAt.toFixed(2), '-' + fmtFull(MPCrash.bet), false);
         setTimeout(closeModal, 1500);
@@ -232,6 +237,7 @@ function mpPlaceBet() {
     const betBtn = document.getElementById('mpBetBtn');
     if (betBtn) betBtn.disabled = true;
 
+    sndBet();
     haptic('medium');
 }
 
