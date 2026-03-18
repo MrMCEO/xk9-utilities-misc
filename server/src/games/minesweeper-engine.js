@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { createSession, getSession, deleteSession, updateSession } = require('./session-store');
+const { createSession, getSession, deleteSession, updateSession, getUserSession } = require('./session-store');
 const { updateBalanceChecked, updateDonateBalanceChecked, updateBalance, updateDonateBalance } = require('../db/users');
 const { addGame } = require('../db/games');
 
@@ -44,6 +44,11 @@ function start(userId, stake, wallet = 'main', mineCount = 5) {
   // Валидация ставки
   if (!Number.isFinite(stake) || stake <= 0) {
     return { ok: false, error: 'invalid_stake' };
+  }
+
+  // Запрещаем начать новую игру если уже есть активная сессия (защита от потери ставки)
+  if (getUserSession(userId, 'minesweeper')) {
+    return { ok: false, error: 'session_already_active' };
   }
 
   mineCount = Math.max(1, Math.min(30, mineCount));

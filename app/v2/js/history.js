@@ -239,7 +239,8 @@ function _buildItem(g) {
     div.className = 'history-item' + (g.won ? '' : ' lost');
 
     const icon  = GAME_ICONS[g.game_type] || '🎮';
-    const name  = GAME_NAMES[g.game_type] || g.game_type;
+    // SECURITY: если тип игры неизвестен — показываем заглушку, не пользовательские данные
+    const name  = GAME_NAMES[g.game_type] || 'Игра';
     const mult  = (g.multiplier || 1).toFixed(2);
     const time  = _timeAgo(g.created_at);
     const stake = _fmtShort(g.stake);
@@ -285,7 +286,8 @@ function _timeAgo(dateStr) {
     if (!dateStr) return '';
     const now  = Date.now();
     const then = new Date(dateStr).getTime();
-    if (isNaN(then)) return dateStr;
+    // SECURITY: если дата невалидна — возвращаем пустую строку, а не dateStr (защита от XSS)
+    if (isNaN(then)) return '';
 
     const diffMs  = now - then;
     const diffSec = Math.floor(diffMs / 1000);

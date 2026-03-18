@@ -37,8 +37,8 @@ const MIME_TYPES = {
  * Возвращает true если файл найден и отдан, false иначе.
  */
 function serveStatic(req, res, urlPath) {
-  // Только GET
-  if (req.method !== 'GET') return false;
+  // Только GET и HEAD
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
   // Только пути начинающиеся с /app/
   if (!urlPath.startsWith('/app/')) return false;
 
@@ -61,7 +61,12 @@ function serveStatic(req, res, urlPath) {
       'Cache-Control': 'public, max-age=300',
       ...corsHeaders(),
     });
-    fs.createReadStream(filePath).pipe(res);
+    // HEAD — только заголовки, тело не отправляем
+    if (req.method === 'HEAD') {
+      res.end();
+    } else {
+      fs.createReadStream(filePath).pipe(res);
+    }
     return true;
   } catch {
     return false;
@@ -69,6 +74,35 @@ function serveStatic(req, res, urlPath) {
 }
 
 const MAX_STAKE = 10_000_000;
+
+/* ── Rate limiter: максимум 60 запросов в минуту на IP ── */
+const _rateLimitMap = new Map(); // ip -> { count, resetAt }
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_WINDOW = 60 * 1000;
+
+// Очистка устаревших записей каждые 5 минут
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if (now > entry.resetAt) _rateLimitMap.delete(ip);
+  }
+}, 5 * 60 * 1000).unref();
+
+/**
+ * Проверить rate limit для IP. Возвращает true если лимит не превышен, false — если превышен.
+ */
+function checkRateLimit(req) {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
+  const now = Date.now();
+  const entry = _rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    _rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) return false;
+  return true;
+}
 
 /**
  * Парсить JSON из тела HTTP запроса (Node.js http без фреймворка).
@@ -146,9 +180,15 @@ async function handleRequest(req, res) {
   // Статические файлы (app/v2/*)
   if (serveStatic(req, res, url)) return;
 
-  // Health check
+  // Health check (не считается в лимит)
   if (url === '/health' && method === 'GET') {
     json(res, { ok: true, ts: Date.now() });
+    return;
+  }
+
+  // Rate limiting — только для API-запросов
+  if (url.startsWith('/api/') && !checkRateLimit(req)) {
+    json(res, { ok: false, error: 'rate_limited' }, 429);
     return;
   }
 

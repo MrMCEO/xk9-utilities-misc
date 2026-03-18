@@ -1,7 +1,7 @@
 'use strict';
 
 const { generateCrashPoint, generateServerSeed } = require('./provably-fair');
-const { createSession, getSession, deleteSession } = require('./session-store');
+const { createSession, getSession, deleteSession, getUserSession } = require('./session-store');
 const { updateBalanceChecked, updateDonateBalanceChecked, updateBalance, updateDonateBalance } = require('../db/users');
 const { addGame } = require('../db/games');
 
@@ -28,6 +28,11 @@ function start(userId, stake, wallet = 'main') {
     return { ok: false, error: 'invalid_stake' };
   }
 
+  // Запрещаем начать новую игру если уже есть активная сессия (защита от потери ставки)
+  if (getUserSession(userId, 'rocket')) {
+    return { ok: false, error: 'session_already_active' };
+  }
+
   // Атомарно списываем ставку
   const useDonate = wallet === 'donate';
   let result;
@@ -52,7 +57,9 @@ function start(userId, stake, wallet = 'main') {
     startTime: Date.now(),
   });
 
-  return { ok: true, sessionId, balance: result.balance, crashAt: crashPoint };
+  // SECURITY: не возвращаем crashAt клиенту — иначе клиент знает точку краша
+  // и может всегда забирать до неё. Краш определяется только по серверному cashout.
+  return { ok: true, sessionId, balance: result.balance };
 }
 
 /**
