@@ -101,6 +101,7 @@
     border-color:rgba(0,230,118,0.45);
     box-shadow:0 0 8px rgba(0,230,118,0.15);
     font-size:12px;
+    animation:cellGlow 0.3s ease-out;
 }
 
 /* Stone fell here */
@@ -122,7 +123,7 @@
     border-color:rgba(255,68,85,0.8);
     box-shadow:0 0 18px rgba(255,68,85,0.4);
     font-size:14px;
-    animation:ldBoom .42s ease;
+    animation:ldBoom .42s ease, cellShake 0.3s ease-out;
 }
 @keyframes ldBoom {
     0%   { transform:scale(1); }
@@ -163,4 +164,62 @@
     padding:4px 0 2px;
     line-height:1;
     transition:opacity .3s;
+}
+
+/* ── Персонаж — плавное движение по сетке ── */
+.ladder-player {
+    position:absolute;
+    font-size:24px;
+    line-height:1;
+    transition:left 0.35s cubic-bezier(0.34,1.56,0.64,1),
+               top  0.35s cubic-bezier(0.34,1.56,0.64,1);
+    z-index:10;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    pointer-events:none;
+    user-select:none;
+}
+
+/* Прыжок */
+@keyframes ladderJump {
+    0%   { transform:translateY(0) scale(1); }
+    30%  { transform:translateY(-14px) scale(1.1); }
+    55%  { transform:translateY(-20px) scale(1.15); }
+    100% { transform:translateY(0) scale(1); }
+}
+.ladder-player.jumping {
+    animation:ladderJump 0.4s ease-out;
+}
+
+/* Победный танец */
+@keyframes ladderCelebrate {
+    0%,100% { transform:scale(1) rotate(0deg); }
+    25%     { transform:scale(1.2) rotate(-10deg); }
+    50%     { transform:scale(1.3) rotate(0deg); }
+    75%     { transform:scale(1.2) rotate(10deg); }
+}
+.ladder-player.celebrate {
+    animation:ladderCelebrate 0.6s ease-in-out;
+}
+
+/* Падение при проигрыше */
+@keyframes ladderFall {
+    0%   { transform:translateY(0) rotate(0deg); opacity:1; }
+    100% { transform:translateY(40px) rotate(90deg); opacity:0.3; }
+}
+.ladder-player.falling {
+    animation:ladderFall 0.5s ease-in forwards;
+}
+
+/* ── Ячейка — вспышка при безопасном шаге ── */
+@keyframes cellGlow {
+    0%   { box-shadow:0 0 0 rgba(0,230,118,0); }
+    50%  { box-shadow:0 0 15px rgba(0,230,118,0.6); }
+    100% { box-shadow:0 0 5px rgba(0,230,118,0.2); }
+}
+
+/* ── Ячейка — тряска при попадании в камень ── */
+@keyframes cellShake {
+    0%,100% { transform:translateX(0); }
+    25%     { transform:translateX(-3px); }
+    75%     { transform:translateX(3px); }
 }

@@ -60,6 +60,7 @@ function ldBuildGrid() {
     cellCache.clear();
     const g = LDel.grid;
     g.innerHTML = '';
+    g.style.position = 'relative';
     for (let r = LD_ROWS - 1; r >= 0; r--) {
         const row = document.createElement('div');
         row.className  = 'ladder-row future';
@@ -113,8 +114,71 @@ function ldSetStates(activeRow) {
         else if (r === activeRow) row.classList.add('active');
         else                      row.classList.add('future');
     }
-    const activeEl = ldGetRow(activeRow);
-    if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Плавная прокрутка с задержкой — после начала анимации прыжка
+    setTimeout(() => {
+        const activeEl = ldGetRow(activeRow);
+        if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+}
+
+/* ── Персонаж — получить или создать ── */
+function ldGetPlayer() {
+    return document.getElementById('lPlayer');
+}
+function ldCreatePlayer() {
+    const player = document.createElement('div');
+    player.id = 'lPlayer';
+    player.className = 'ladder-player';
+    player.textContent = '🧍';
+    LDel.grid.appendChild(player);
+    return player;
+}
+
+/* ── Переместить персонажа к выбранной ячейке ── */
+function ldMovePlayerToRow(row, platform) {
+    const player = ldGetPlayer() || ldCreatePlayer();
+    const targetCell = ldGetCell(row, platform);
+    if (!targetCell) return;
+
+    // Скрыть стартовый символ при первом шаге
+    const charStart = document.getElementById('ldChar');
+    if (charStart) charStart.style.opacity = '0';
+
+    const grid = LDel.grid;
+    const gridRect = grid.getBoundingClientRect();
+    const cellRect  = targetCell.getBoundingClientRect();
+    const scrollTop = grid.scrollTop;
+
+    const left = cellRect.left - gridRect.left + cellRect.width / 2 - 12;
+    const top  = cellRect.top  - gridRect.top  + scrollTop - 28;
+
+    player.style.left = left + 'px';
+    player.style.top  = top  + 'px';
+
+    // Анимация прыжка
+    player.classList.remove('jumping', 'celebrate', 'falling');
+    void player.offsetWidth; // reflow
+    player.classList.add('jumping');
+    setTimeout(() => player.classList.remove('jumping'), 400);
+}
+
+/* ── Победный танец ── */
+function ldCelebratePlayer() {
+    const player = ldGetPlayer();
+    if (!player) return;
+    player.classList.remove('jumping', 'falling');
+    void player.offsetWidth;
+    player.classList.add('celebrate');
+    setTimeout(() => player.classList.remove('celebrate'), 600);
+}
+
+/* ── Падение при проигрыше ── */
+function ldFallPlayer() {
+    const player = ldGetPlayer();
+    if (!player) return;
+    player.classList.remove('jumping', 'celebrate');
+    void player.offsetWidth;
+    player.classList.add('falling');
 }
 
 /* ── Анимированное раскрытие результата ── */
@@ -122,6 +186,8 @@ async function ldReveal(rowIdx, stoneSet, chosenPlatform, isHit) {
     if (!isHit) {
         const cc = ldGetCell(rowIdx, chosenPlatform);
         if (cc) { cc.classList.add('l-safe'); cc.textContent = '💎'; }
+        // Персонаж запрыгивает на безопасную ячейку
+        ldMovePlayerToRow(rowIdx, chosenPlatform);
     }
     for (const platIdx of stoneSet) {
         await new Promise(r => setTimeout(r, 65));
@@ -129,6 +195,8 @@ async function ldReveal(rowIdx, stoneSet, chosenPlatform, isHit) {
         if (!cell) continue;
         if (platIdx === chosenPlatform && isHit) {
             cell.classList.add('l-hit');   cell.textContent = '💥';
+            // Персонаж падает при попадании на камень
+            ldFallPlayer();
         } else {
             cell.classList.add('l-stone'); cell.textContent = '🪨';
         }
@@ -179,6 +247,7 @@ async function ldTap(rowIdx, platIdx) {
             ldUpdateStats();
 
             if (LD.currentRow === LD_ROWS - 1) {
+                ldCelebratePlayer();
                 await new Promise(r => setTimeout(r, 400));
                 ldWin(true);
             } else {
@@ -221,6 +290,7 @@ function ldWin(topReached) {
     changeBalance(profit);
     recordGame(true, profit);
     hNotify('success');
+    ldCelebratePlayer();
     const sub = topReached
         ? '🏆 Покорил вершину! x' + LD.mult.toFixed(2)
         : 'x' + LD.mult.toFixed(2) + ' · Ряд ' + (LD.currentRow + 1) + '/' + LD_ROWS;
