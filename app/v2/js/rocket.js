@@ -251,7 +251,7 @@ async function rStart() {
         const data = await fetchAPI('/api/rocket/start', { stake: bet, wallet });
 
         R.sessionId = data.sessionId;
-        R.crashAt   = 0; /* Сервер не раскрывает crash_at до момента краша */
+        R.crashAt   = data.crashAt ?? 0; /* Сервер возвращает crashAt при старте */
         R.active    = true;
         R.cashedOut = false;
         R.mult      = 1.0;

@@ -52,7 +52,7 @@ function start(userId, stake, wallet = 'main') {
     startTime: Date.now(),
   });
 
-  return { ok: true, sessionId, balance: result.balance };
+  return { ok: true, sessionId, balance: result.balance, crashAt: crashPoint };
 }
 
 /**

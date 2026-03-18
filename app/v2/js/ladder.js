@@ -182,6 +182,19 @@ function ldFallPlayer() {
     player.classList.add('falling');
 }
 
+/* ── Показать камни на пройденном ряду (после безопасного шага) ── */
+function ldShowStones(rowIdx, stonePositions) {
+    stonePositions.forEach((pos, i) => {
+        const cell = ldGetCell(rowIdx, pos);
+        if (!cell) return;
+        // Задержка для эффекта последовательного падения
+        setTimeout(() => {
+            cell.classList.add('l-stone-revealed');
+            cell.textContent = '🪨';
+        }, i * 100);
+    });
+}
+
 /* ── Анимированное раскрытие результата ── */
 async function ldReveal(rowIdx, stoneSet, chosenPlatform, isHit) {
     if (!isHit) {
@@ -189,12 +202,19 @@ async function ldReveal(rowIdx, stoneSet, chosenPlatform, isHit) {
         if (cc) { cc.classList.add('l-safe'); cc.textContent = '💎'; }
         // Персонаж запрыгивает на безопасную ячейку
         ldMovePlayerToRow(rowIdx, chosenPlatform);
+        // Показать камни на пройденном ряду с анимацией падения
+        ldShowStones(rowIdx, stoneSet);
+        // Ждём пока все камни появятся
+        if (stoneSet.length > 0) {
+            await new Promise(r => setTimeout(r, stoneSet.length * 100 + 150));
+        }
+        return;
     }
     for (const platIdx of stoneSet) {
         await new Promise(r => setTimeout(r, 65));
         const cell = ldGetCell(rowIdx, platIdx);
         if (!cell) continue;
-        if (platIdx === chosenPlatform && isHit) {
+        if (platIdx === chosenPlatform) {
             cell.classList.add('l-hit');   cell.textContent = '💥';
             // Персонаж падает при попадании на камень
             ldFallPlayer();
