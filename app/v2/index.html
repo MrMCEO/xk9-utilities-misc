@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="css/ladder.css">
     <link rel="stylesheet" href="css/crash-mp.css">
     <link rel="stylesheet" href="css/admin.css">
+    <link rel="stylesheet" href="css/history.css">
+    <link rel="stylesheet" href="css/leaderboard.css">
 </head>
 <body>
 
@@ -44,6 +46,8 @@
     <button class="tab-btn"        data-tab="mine"   role="tab" aria-selected="false" aria-controls="screenMine">  <span class="ti">💣</span> Сапер</button>
     <button class="tab-btn"        data-tab="ladder"   role="tab" aria-selected="false" aria-controls="screenLadder">  <span class="ti">🪜</span> Лесенка</button>
     <button class="tab-btn"        data-tab="crash-mp" role="tab" aria-selected="false" aria-controls="screenCrashMp"><span class="ti">🌐</span> Онлайн</button>
+    <button class="tab-btn"        data-tab="history"     role="tab" aria-selected="false" aria-controls="screenHistory">    <span class="ti">📋</span> История</button>
+    <button class="tab-btn"        data-tab="leaderboard" role="tab" aria-selected="false" aria-controls="screenLeaderboard"><span class="ti">🏆</span> Топ</button>
 </div>
 
 <!-- SESSION STATS -->
@@ -283,6 +287,41 @@
         <button class="btn btn-green" id="mpCashoutBtn" disabled>💎 Забрать</button>
     </div>
 
+</section>
+
+<!-- ══════════ HISTORY ══════════ -->
+<section id="screenHistory" class="screen">
+    <div class="history-header">
+        <h2 class="history-title">История ставок</h2>
+        <div class="history-stats" id="historyStats">
+            <!-- Статистика: всего, победы, проигрыши, профит — заполняется JS -->
+        </div>
+    </div>
+    <div class="history-filters">
+        <button class="hf-btn active" data-filter="all">Все</button>
+        <button class="hf-btn" data-filter="rocket">🚀</button>
+        <button class="hf-btn" data-filter="minesweeper">💣</button>
+        <button class="hf-btn" data-filter="ladder">🪜</button>
+        <button class="hf-btn" data-filter="crash-mp">🌐</button>
+    </div>
+    <div class="history-list" id="historyList">
+        <!-- Заполняется JS -->
+    </div>
+    <button class="history-load-more" id="historyLoadMore" style="display:none">Загрузить ещё</button>
+</section>
+
+<!-- ══════════ LEADERBOARD ══════════ -->
+<section id="screenLeaderboard" class="screen">
+    <div class="lb-tabs">
+        <button class="lb-tab active" data-lb="balance">💰 По балансу</button>
+        <button class="lb-tab" data-lb="winnings">🏆 По выигрышам</button>
+    </div>
+    <div class="lb-your-rank" id="lbYourRank" style="display:none">
+        <!-- Твоя позиция — заполняется JS -->
+    </div>
+    <div class="lb-list" id="lbList">
+        <!-- Заполняется JS -->
+    </div>
 </section>
 
 <!-- ══════════ ADMIN PANEL ══════════ -->

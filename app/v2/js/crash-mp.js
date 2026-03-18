@@ -183,6 +183,7 @@ function mpCashoutResult(msg) {
     if (msg.ok) {
         /* Выигрыш — сервер уже зачислил средства */
         setBalanceFromServer(msg.balance);
+        recordGame(true, msg.winnings ?? 0);
         sndWin();
         const modalTitle = mpCashoutIsAuto
             ? `Авто-кэшаут на x${(msg.multiplier || 1).toFixed(2)}`
@@ -192,6 +193,7 @@ function mpCashoutResult(msg) {
     } else {
         /* Сервер сообщил, что краш был до нашего кешаута */
         if (msg.balance !== undefined) setBalanceFromServer(msg.balance);
+        recordGame(false, -MPCrash.bet);
         sndLose();
         openModal('💥', 'Слишком поздно', '', '-' + fmtFull(MPCrash.bet), false);
         setTimeout(closeModal, 1500);

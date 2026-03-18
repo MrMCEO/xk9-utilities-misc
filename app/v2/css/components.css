@@ -209,6 +209,24 @@
 .dep-success-sub { font-size:12px; color:var(--muted); margin-bottom:18px; }
 
 /* ═══════════════════════════════════════════════════
+   SESSION STATS
+═══════════════════════════════════════════════════ */
+.session-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 6px 12px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+}
+.ss-item { text-align: center; }
+.ss-val { font-size: 14px; font-weight: 700; display: block; }
+.ss-label { font-size: 10px; color: var(--muted); }
+.ss-item.ss-win .ss-val { color: var(--green); }
+.ss-item.ss-lose .ss-val { color: var(--red); }
+#ssProfit.positive { color: var(--green); }
+#ssProfit.negative { color: var(--red); }
+
+/* ═══════════════════════════════════════════════════
    RIPPLE EFFECT
 ═══════════════════════════════════════════════════ */
 .ripple-effect {
