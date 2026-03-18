@@ -4,8 +4,12 @@
  */
 
 import { fetchAPI }        from './api.js';
-import { openModal, closeModal, sndClick, sndWin, sndLose, haptic } from './ui.js';
+import { openModal, closeModal, sndClick, sndWin, sndLose, sndBet, sndMilestone, haptic } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
+import { recordGame } from './session-stats.js';
+
+/* ── Авто-кэшаут ── */
+let rAutoCashoutTarget = 0;
 
 /* ── Ссылки на DOM-элементы ── */
 const R = {
@@ -15,13 +19,14 @@ const R = {
     frame: null,
     history: [],
     els: {
-        mult:     document.getElementById('rMult'),
-        hint:     document.getElementById('rHint'),
-        btn:      document.getElementById('rActionBtn'),
-        betInput: document.getElementById('rBetInput'),
-        histBar:  document.getElementById('rHistory'),
-        canvas:   document.getElementById('rCanvas'),
-        rocket:   document.getElementById('rRocket'),
+        mult:        document.getElementById('rMult'),
+        hint:        document.getElementById('rHint'),
+        btn:         document.getElementById('rActionBtn'),
+        betInput:    document.getElementById('rBetInput'),
+        histBar:     document.getElementById('rHistory'),
+        canvas:      document.getElementById('rCanvas'),
+        rocket:      document.getElementById('rRocket'),
+        autoCashout: document.getElementById('rAutoCashout'),
     }
 };
 
@@ -173,6 +178,7 @@ function rTriggerMilestone(el) {
     el.classList.remove('milestone');
     void el.offsetWidth;
     el.classList.add('milestone');
+    sndMilestone();
     haptic('medium');
     el.addEventListener('animationend', () => el.classList.remove('milestone'), { once: true });
 }
@@ -200,6 +206,13 @@ function rLoop() {
         rCrash();
         return;
     }
+
+    /* Авто-кэшаут — срабатывает если достигнут заданный множитель */
+    if (rAutoCashoutTarget > 0 && R.mult >= rAutoCashoutTarget && !R.cashedOut) {
+        rCashout(true);
+        return;
+    }
+
     R.frame = requestAnimationFrame(rLoop);
 }
 
@@ -221,11 +234,16 @@ async function rStart() {
         return;
     }
 
+    /* Считываем авто-кэшаут */
+    const acVal = parseFloat(R.els.autoCashout?.value);
+    rAutoCashoutTarget = (acVal >= 1.01) ? acVal : 0;
+
     /* Блокируем кнопку на время запроса */
     const origText = R.els.btn.textContent;
     R.els.btn.textContent = 'Загрузка...';
     R.els.btn.disabled = true;
     R.els.betInput.disabled = true;
+    if (R.els.autoCashout) R.els.autoCashout.disabled = true;
 
     try {
         const wallet = activeWallet;
@@ -255,12 +273,13 @@ async function rStart() {
         R.els.btn.textContent   = origText;
         R.els.btn.disabled      = false;
         R.els.betInput.disabled = false;
+        if (R.els.autoCashout) R.els.autoCashout.disabled = false;
         openModal('⚠️', 'Ошибка', 'Не удалось начать игру', err.message || 'Проблема с сетью', null);
     }
 }
 
 /* ── Cashout ── */
-async function rCashout() {
+async function rCashout(isAuto = false) {
     if (!R.active || R.cashedOut) return;
     R.cashedOut = true;
     // НЕ останавливаем анимацию здесь — блокируем только кнопку
@@ -280,6 +299,7 @@ async function rCashout() {
         R.active = false;
         rDraw(elapsed, false);
         R.els.betInput.disabled = false;
+        if (R.els.autoCashout) R.els.autoCashout.disabled = false;
         R.els.btn.disabled      = false;
         R.els.btn.textContent   = 'Сделать ставку';
         R.els.btn.className     = 'btn btn-brand';
@@ -291,10 +311,14 @@ async function rCashout() {
             rPushHistory(finalMult, true);
             sndWin();
             changeBalance(profit);
+            recordGame(true, profit);
             R.els.hint.textContent = '✅ Забрали ' + fmtFull(total);
             R.els.mult.textContent = 'x' + finalMult.toFixed(2);
+            const modalTitle = isAuto
+                ? `Авто-кэшаут на x${finalMult.toFixed(2)}`
+                : 'Множитель x' + finalMult.toFixed(2);
             setTimeout(() => {
-                openModal('🎉', 'Победа!', 'Множитель x' + finalMult.toFixed(2), '+' + fmtFull(profit), true);
+                openModal('🎉', 'Победа!', modalTitle, '+' + fmtFull(profit), true);
                 setTimeout(closeModal, 3000);
             }, 200);
         } else {
@@ -326,11 +350,13 @@ function rCrashVisual(elapsed) {
     rPushHistory(R.crashAt, false);
     sndLose();
     changeBalance(-R.bet);
+    recordGame(false, -R.bet);
     rDraw(elapsed, true);
     R.els.mult.classList.add('crashed');
     R.els.mult.textContent = 'x' + R.crashAt.toFixed(2);
     R.els.hint.textContent = '💥 Краш!';
     R.els.betInput.disabled = false;
+    if (R.els.autoCashout) R.els.autoCashout.disabled = false;
     R.els.btn.disabled      = false;
     R.els.btn.textContent   = 'Сделать ставку';
     R.els.btn.className     = 'btn btn-brand';

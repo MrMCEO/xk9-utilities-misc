@@ -6,12 +6,6 @@
     <title>BFG</title>
     <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
 
-    <!-- API / WebSocket endpoints (заменить на свой домен в продакшене) -->
-    <script>
-      window.API_URL = 'https://bfg-casino.loca.lt';
-      window.MP_CRASH_WS_URL = 'wss://bfg-casino.loca.lt/ws/crash';
-    </script>
-
     <!-- CSS-слои: токены → база → компоненты → игры → админ -->
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/base.css">
@@ -48,7 +42,16 @@
 <div class="tab-bar" role="tablist">
     <button class="tab-btn active" data-tab="rocket" role="tab" aria-selected="true"  aria-controls="screenRocket"><span class="ti">🚀</span> Ракета</button>
     <button class="tab-btn"        data-tab="mine"   role="tab" aria-selected="false" aria-controls="screenMine">  <span class="ti">💣</span> Сапер</button>
-    <button class="tab-btn"        data-tab="ladder" role="tab" aria-selected="false" aria-controls="screenLadder"><span class="ti">🪜</span> Лесенка</button>
+    <button class="tab-btn"        data-tab="ladder"   role="tab" aria-selected="false" aria-controls="screenLadder">  <span class="ti">🪜</span> Лесенка</button>
+    <button class="tab-btn"        data-tab="crash-mp" role="tab" aria-selected="false" aria-controls="screenCrashMp"><span class="ti">🌐</span> Онлайн</button>
+</div>
+
+<!-- SESSION STATS -->
+<div class="session-stats" id="sessionStats">
+    <div class="ss-item"><span class="ss-val" id="ssGames">0</span><span class="ss-label">Игр</span></div>
+    <div class="ss-item ss-win"><span class="ss-val" id="ssWins">0</span><span class="ss-label">Побед</span></div>
+    <div class="ss-item ss-lose"><span class="ss-val" id="ssLosses">0</span><span class="ss-label">Проигр.</span></div>
+    <div class="ss-item"><span class="ss-val" id="ssProfit">+0</span><span class="ss-label">Профит</span></div>
 </div>
 
 <main>
@@ -83,6 +86,11 @@
             <button class="qb" data-v="1000">1K</button>
             <button class="qb" data-v="5000">5K</button>
             <button class="qb" data-v="10000">10K</button>
+        </div>
+        <div class="sec-label">Авто-кэшаут</div>
+        <div class="auto-cashout-wrap">
+            <input type="number" inputmode="decimal" id="rAutoCashout" class="bet-input auto-cashout-input" placeholder="Выкл" min="1.01" step="0.01">
+            <span class="ac-suffix">x</span>
         </div>
     </div>
 
@@ -226,6 +234,53 @@
     <!-- In-game panel -->
     <div id="lGamePanel" style="display:none">
         <button class="btn btn-green" id="lCashoutBtn" disabled>💎 Забрать выигрыш</button>
+    </div>
+
+</section>
+
+<!-- ══════════ CRASH MP ══════════ -->
+<section id="screenCrashMp" class="screen">
+
+    <div class="history-strip" id="mpHistory"></div>
+
+    <div class="crash-mp-stage">
+        <canvas class="crash-mp-canvas" id="mpCanvas"></canvas>
+        <div class="stage-info">
+            <div class="mult-display" id="mpMult">x1.00</div>
+            <div class="crash-mp-status" id="mpStatus">Ожидание...</div>
+        </div>
+    </div>
+
+    <div class="crash-mp-players" id="mpPlayersList">
+        <div style="color:var(--muted);font-size:11px;text-align:center;padding:8px">Нет игроков</div>
+    </div>
+
+    <div class="card">
+        <div class="sec-label">Кошелёк</div>
+        <div class="wallet-toggle" id="mpWalletToggle">
+            <button class="wt-btn active" data-wallet="main">💰 Основной</button>
+            <button class="wt-btn donate" data-wallet="donate">⭐ Донатный</button>
+        </div>
+        <div class="sec-label">Ставка</div>
+        <input type="number" inputmode="decimal" class="bet-input" id="mpBetInput" value="100" min="1">
+        <div class="quick-bets">
+            <button class="qb" data-v="50">50</button>
+            <button class="qb" data-v="100">100</button>
+            <button class="qb" data-v="500">500</button>
+            <button class="qb" data-v="1000">1K</button>
+            <button class="qb" data-v="5000">5K</button>
+            <button class="qb" data-v="10000">10K</button>
+        </div>
+        <div class="sec-label">Авто-кэшаут</div>
+        <div class="auto-cashout-wrap">
+            <input type="number" inputmode="decimal" id="mpAutoCashout" class="bet-input auto-cashout-input" placeholder="Выкл" min="1.01" step="0.01">
+            <span class="ac-suffix">x</span>
+        </div>
+    </div>
+
+    <div class="mp-action-row">
+        <button class="btn btn-brand" id="mpBetBtn">Сделать ставку</button>
+        <button class="btn btn-green" id="mpCashoutBtn" disabled>💎 Забрать</button>
     </div>
 
 </section>

@@ -65,3 +65,31 @@
 .crash-mp-status.waiting { background:var(--gold-lo); color:var(--gold); border-color:rgba(245,166,35,0.3); }
 .crash-mp-status.crashed { background:var(--red-lo); color:var(--red); border-color:rgba(255,68,85,0.3); }
 .crash-mp-status.running { background:var(--green); color:#fff; border-color:var(--green); }
+
+/* Авто-кэшаут */
+.auto-cashout-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.auto-cashout-input {
+    padding-right: 24px;
+    max-width: 120px;
+}
+.ac-suffix {
+    position: absolute;
+    right: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+/* Строка с двумя кнопками действий (Ставка + Забрать) */
+.mp-action-row {
+    display:flex;
+    gap:10px;
+    margin-top:4px;
+}
+.mp-action-row .btn {
+    flex:1;
+}

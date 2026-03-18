@@ -10,6 +10,9 @@ import { changeBalance, setBalanceFromServer, getActiveBalance, activeWallet, fm
    MP КРАШ — WebSocket клиент
 ════════════════════════════════════════════════════════ */
 
+/* ── Авто-кэшаут ── */
+let mpAutoCashoutTarget = 0;
+
 const MPCrash = {
     ws:         null,
     connected:  false,
@@ -137,6 +140,8 @@ function mpPhaseCrashed(msg) {
 
     MPCrash.betPlaced = false;
     MPCrash.cashedOut = false;
+    const acInputCrash = document.getElementById('mpAutoCashout');
+    if (acInputCrash) acInputCrash.disabled = false;
     const cashoutBtn = document.getElementById('mpCashoutBtn');
     if (cashoutBtn) cashoutBtn.disabled = true;
 }
@@ -147,23 +152,37 @@ function mpLoop() {
     const t = (Date.now() - MPCrash.startTime) / 1000;
     MPCrash.mult = 1 + t * 0.1 + Math.pow(t, 2) * 0.012;
     mpRenderMult('x' + MPCrash.mult.toFixed(2), false);
+
+    /* Авто-кэшаут — срабатывает если достигнут заданный множитель */
+    if (mpAutoCashoutTarget > 0 && MPCrash.mult >= mpAutoCashoutTarget && MPCrash.betPlaced && !MPCrash.cashedOut) {
+        mpCashout(true);
+        return;
+    }
+
     MPCrash.frame = requestAnimationFrame(mpLoop);
 }
 
 /* ── Кешаут ── */
-function mpCashout() {
+let mpCashoutIsAuto = false;
+
+function mpCashout(isAuto = false) {
     if (!MPCrash.connected || MPCrash.phase !== 'running') return;
     if (!MPCrash.betPlaced || MPCrash.cashedOut) return;
     MPCrash.cashedOut = true;
+    mpCashoutIsAuto = isAuto;
     MPCrash.ws.send(JSON.stringify({ type: 'cashout', sessionId: MPCrash.sessionId }));
 }
 
 function mpCashoutResult(msg) {
+    const acInput = document.getElementById('mpAutoCashout');
     if (msg.ok) {
         /* Выигрыш — сервер уже зачислил средства */
         setBalanceFromServer(msg.balance);
         sndWin();
-        openModal('🎉', 'Победа!', 'Множитель x' + (msg.multiplier || 1).toFixed(2), '+' + fmtFull(msg.winnings ?? 0), true);
+        const modalTitle = mpCashoutIsAuto
+            ? `Авто-кэшаут на x${(msg.multiplier || 1).toFixed(2)}`
+            : 'Множитель x' + (msg.multiplier || 1).toFixed(2);
+        openModal('🎉', 'Победа!', modalTitle, '+' + fmtFull(msg.winnings ?? 0), true);
         setTimeout(closeModal, 1500);
     } else {
         /* Сервер сообщил, что краш был до нашего кешаута */
@@ -172,8 +191,10 @@ function mpCashoutResult(msg) {
         openModal('💥', 'Слишком поздно', '', '-' + fmtFull(MPCrash.bet), false);
         setTimeout(closeModal, 1500);
     }
+    mpCashoutIsAuto = false;
     MPCrash.betPlaced = false;
     MPCrash.cashedOut = false;
+    if (acInput) acInput.disabled = false;
     const cashoutBtn = document.getElementById('mpCashoutBtn');
     if (cashoutBtn) cashoutBtn.disabled = true;
 }
@@ -192,6 +213,12 @@ function mpPlaceBet() {
         openModal('⚠️', 'Мало средств', '', activeWallet === 'donate' ? fmtDonate(avail) : fmtShort(avail), null);
         return;
     }
+
+    /* Считываем авто-кэшаут */
+    const acInput = document.getElementById('mpAutoCashout');
+    const acVal = parseFloat(acInput?.value);
+    mpAutoCashoutTarget = (acVal >= 1.01) ? acVal : 0;
+    if (acInput) acInput.disabled = true;
 
     MPCrash.bet = bet;
     MPCrash.ws.send(JSON.stringify({
@@ -213,6 +240,8 @@ function mpResetBet() {
     MPCrash.cashedOut = false;
     const betBtn = document.getElementById('mpBetBtn');
     if (betBtn) betBtn.disabled = false;
+    const acInput = document.getElementById('mpAutoCashout');
+    if (acInput) acInput.disabled = false;
 }
 
 /* ── UI helpers ── */
