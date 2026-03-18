@@ -265,8 +265,20 @@ function mResetUI() {
 }
 
 /* ── Кнопки ── */
-document.getElementById('mStartBtn').addEventListener('click',   () => { sndClick(); mStart(); });
-document.getElementById('mCashoutBtn').addEventListener('click', mCashout);
+document.getElementById('mStartBtn').addEventListener('click', () => {
+    const btn = document.getElementById('mStartBtn');
+    /* Синхронная защита от двойного нажатия */
+    if (btn.dataset.pending) return;
+    btn.dataset.pending = '1';
+    sndClick();
+    mStart().finally(() => { delete btn.dataset.pending; });
+});
+document.getElementById('mCashoutBtn').addEventListener('click', () => {
+    const btn = document.getElementById('mCashoutBtn');
+    if (btn.dataset.pending) return;
+    btn.dataset.pending = '1';
+    mCashout().finally(() => { delete btn.dataset.pending; });
+});
 
 /* ── Пресеты мин ── */
 document.querySelectorAll('.mine-opt').forEach(btn => {

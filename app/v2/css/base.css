@@ -7,6 +7,57 @@
 html { height:100%; }
 body { height:100%; overflow:hidden; }
 
+/* ── TOUCH RESPONSIVENESS — убрать 300ms задержку на мобильных ── */
+button,
+.btn,
+[role="button"],
+input,
+.m-cell,
+.l-cell,
+.sidebar-item,
+.qb,
+.wt-btn,
+.mine-opt,
+.stone-opt,
+.dep-preset,
+.tab-btn,
+.modal-cta,
+.dep-manual-btn,
+.deposit-btn,
+.theme-btn,
+.burger-btn,
+.sidebar-close {
+    touch-action: manipulation;
+}
+
+/* ── Минимальный touch target 44px для основных кнопок ── */
+button,
+.btn,
+.sidebar-item,
+.dep-preset,
+.tab-btn,
+.modal-cta {
+    min-height: 44px;
+}
+
+/* ── Кнопки ставок и быстрых действий — минимум 36px ── */
+.qb,
+.wt-btn,
+.mine-opt,
+.stone-opt {
+    min-height: 36px;
+}
+
+/* ── Ячейки игрового поля ── */
+.m-cell {
+    min-width: 36px;
+    min-height: 36px;
+}
+.l-cell {
+    min-width: 28px;
+    min-height: 32px;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg);
@@ -299,6 +350,11 @@ body>* { position:relative; z-index:1; }
 .sidebar-item:hover {
     background: var(--card);
 }
+.sidebar-item:active {
+    background: var(--brand-lo);
+    transform: scale(0.97);
+    transition: background 0.08s, transform 0.08s;
+}
 .sidebar-item.active {
     background: color-mix(in srgb, var(--brand) 15%, var(--card));
     color: var(--brand);
@@ -410,7 +466,7 @@ main { flex:1; overflow:hidden; position:relative; }
     .stat-val { font-size:17px; }
     .mine-grid { gap:4px; }
     .m-cell { border-radius:7px; }
-    .l-cell { height:24px; }
+    .l-cell { height:28px; min-height:28px; }
     .modal-box { padding:18px 16px; }
     .modal-emoji { font-size:46px; margin-bottom:8px; }
     .modal-title { font-size:20px; }

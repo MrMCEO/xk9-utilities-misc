@@ -235,7 +235,9 @@
     background:rgba(255,255,255,0.28);
     transform:scale(0);
     animation:rippleAnim .5s linear;
-    pointer-events:none;
+    pointer-events:none; /* Ripple никогда не перехватывает клики */
+    user-select:none;
+    z-index:0;
 }
 @keyframes rippleAnim {
     to { transform:scale(4); opacity:0; }

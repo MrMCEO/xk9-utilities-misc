@@ -201,13 +201,6 @@ function rLoop() {
 
     rDraw(t, false);
 
-    /* Сервер сообщает crash_at — клиент проверяет только если уже получил значение */
-    if (R.crashAt > 0 && R.mult >= R.crashAt && !R.cashedOut) {
-        R.mult = R.crashAt;
-        rCrash();
-        return;
-    }
-
     /* Авто-кэшаут — срабатывает если достигнут заданный множитель */
     if (rAutoCashoutTarget > 0 && R.mult >= rAutoCashoutTarget && !R.cashedOut) {
         rCashout(true);
@@ -251,7 +244,7 @@ async function rStart() {
         const data = await fetchAPI('/api/rocket/start', { stake: bet, wallet });
 
         R.sessionId = data.sessionId;
-        R.crashAt   = data.crashAt ?? 0; /* Сервер возвращает crashAt при старте */
+        R.crashAt   = 0; /* crashAt НЕ приходит от сервера — краш обнаруживается только через cashout */
         R.active    = true;
         R.cashedOut = false;
         R.mult      = 1.0;
@@ -373,9 +366,15 @@ function rCrashVisual(elapsed) {
 
 /* ── Кнопка действия ── */
 document.getElementById('rActionBtn').addEventListener('click', () => {
+    const btn = R.els.btn;
+    /* Синхронная защита от двойного нажатия до того, как disabled успеет сработать */
+    if (btn.dataset.pending) return;
     sndClick();
     if (R.active && !R.cashedOut) rCashout();
-    else if (!R.active) rStart();
+    else if (!R.active) {
+        btn.dataset.pending = '1';
+        rStart().finally(() => { delete btn.dataset.pending; });
+    }
 });
 
 /* ── Быстрые ставки ── */

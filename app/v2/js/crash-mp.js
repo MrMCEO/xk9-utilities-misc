@@ -5,6 +5,7 @@
 import { haptic, hNotify, sndWin, sndLose, sndBet, openModal, closeModal } from './ui.js';
 import { changeBalance, setBalanceFromServer, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
 import { recordGame } from './session-stats.js';
+import { addLocalHistory } from './history.js';
 
 /* ════════════════════════════════════════════════════════
    MP КРАШ — WebSocket клиент
@@ -148,6 +149,8 @@ function mpPhaseCrashed(msg) {
        Только показываем анимацию краша. Если сервер прислал balance — обновляем. */
     if (MPCrash.betPlaced && !MPCrash.cashedOut) {
         if (msg.balance !== undefined) setBalanceFromServer(msg.balance);
+        recordGame(false, -MPCrash.bet);
+        addLocalHistory({ game_type: 'crash-mp', stake: MPCrash.bet, won: false, multiplier: crashAt, winnings: 0, wallet: activeWallet });
         sndLose();
         openModal('💥', 'Краш!', 'Упало на x' + crashAt.toFixed(2), '-' + fmtFull(MPCrash.bet), false);
         setTimeout(closeModal, 1500);
@@ -432,14 +435,21 @@ function mpCashoutResult(msg) {
     const acInput = document.getElementById('mpAutoCashout');
     if (msg.ok) {
         setBalanceFromServer(msg.balance);
+        const finalMult = msg.multiplier || 1;
+        const winnings  = msg.winnings ?? 0;
+        const profit    = winnings - MPCrash.bet;
+        recordGame(true, profit);
+        addLocalHistory({ game_type: 'crash-mp', stake: MPCrash.bet, won: true, multiplier: finalMult, winnings, wallet: activeWallet });
         sndWin();
         const modalTitle = mpCashoutIsAuto
-            ? `Авто-кэшаут на x${(msg.multiplier || 1).toFixed(2)}`
-            : 'Множитель x' + (msg.multiplier || 1).toFixed(2);
-        openModal('🎉', 'Победа!', modalTitle, '+' + fmtFull(msg.winnings ?? 0), true);
+            ? `Авто-кэшаут на x${finalMult.toFixed(2)}`
+            : 'Множитель x' + finalMult.toFixed(2);
+        openModal('🎉', 'Победа!', modalTitle, '+' + fmtFull(profit), true);
         setTimeout(closeModal, 1500);
     } else {
         if (msg.balance !== undefined) setBalanceFromServer(msg.balance);
+        recordGame(false, -MPCrash.bet);
+        addLocalHistory({ game_type: 'crash-mp', stake: MPCrash.bet, won: false, multiplier: 0, winnings: 0, wallet: activeWallet });
         sndLose();
         openModal('💥', 'Слишком поздно', '', '-' + fmtFull(MPCrash.bet), false);
         setTimeout(closeModal, 1500);
@@ -538,7 +548,14 @@ export function initCrashMp() {
     const betBtn     = document.getElementById('mpBetBtn');
     const cashoutBtn = document.getElementById('mpCashoutBtn');
 
-    if (betBtn)     betBtn.addEventListener('click',     mpPlaceBet);
+    if (betBtn) betBtn.addEventListener('click', () => {
+        /* Синхронная защита от двойного нажатия */
+        if (betBtn.dataset.pending) return;
+        betBtn.dataset.pending = '1';
+        mpPlaceBet();
+        /* pending снимается когда кнопка становится disabled */
+        requestAnimationFrame(() => { delete betBtn.dataset.pending; });
+    });
     if (cashoutBtn) cashoutBtn.addEventListener('click', mpCashout);
 
     /* Быстрые ставки */

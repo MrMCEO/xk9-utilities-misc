@@ -410,8 +410,20 @@ document.getElementById('lGrid').addEventListener('click', e => {
 });
 
 /* ── Кнопки ── */
-document.getElementById('lStartBtn').addEventListener('click',   () => { sndClick(); ldStart(); });
-document.getElementById('lCashoutBtn').addEventListener('click', ldCashout);
+document.getElementById('lStartBtn').addEventListener('click', () => {
+    const btn = document.getElementById('lStartBtn');
+    /* Синхронная защита от двойного нажатия */
+    if (btn.dataset.pending) return;
+    btn.dataset.pending = '1';
+    sndClick();
+    ldStart().finally(() => { delete btn.dataset.pending; });
+});
+document.getElementById('lCashoutBtn').addEventListener('click', () => {
+    const btn = document.getElementById('lCashoutBtn');
+    if (btn.dataset.pending) return;
+    btn.dataset.pending = '1';
+    ldCashout().finally(() => { delete btn.dataset.pending; });
+});
 
 /* ── Пресеты камней ── */
 document.querySelectorAll('.stone-opt').forEach(btn => {
