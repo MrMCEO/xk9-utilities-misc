@@ -18,6 +18,17 @@ function getUserGames(telegramId, limit = 15) {
   ).all(telegramId, limit);
 }
 
+/** История ставок пользователя с пагинацией */
+function getUserHistory(telegramId, limit = 50, offset = 0) {
+  const db = getDb();
+  const games = db.prepare(
+    `SELECT id, game_type, stake, result, winnings, multiplier, created_at
+     FROM games WHERE telegram_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).all(telegramId, limit, offset);
+  const row = db.prepare('SELECT COUNT(*) as cnt FROM games WHERE telegram_id=?').get(telegramId);
+  return { games, total: row ? row.cnt : 0 };
+}
+
 /** Статистика пользователя по играм */
 function getUserStats(telegramId) {
   const row = getDb().prepare(`
@@ -162,6 +173,7 @@ function cleanupOldGames(days = 30) {
 module.exports = {
   addGame,
   getUserGames,
+  getUserHistory,
   getUserStats,
   getRecentGames,
   getBetsHistory,

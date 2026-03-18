@@ -1,0 +1,184 @@
+/* ══════════════════════════════════════
+   History — вкладка "📋 История ставок"
+══════════════════════════════════════ */
+
+.history-header {
+    margin-bottom: 4px;
+}
+
+.history-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 8px;
+}
+
+/* ── Статистика (4 плитки) ── */
+.history-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.hs-item {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+}
+
+.hs-val {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.hs-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+/* ── Фильтры ── */
+.history-filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+}
+
+.history-filters::-webkit-scrollbar {
+    display: none;
+}
+
+.hf-btn {
+    padding: 4px 12px;
+    border-radius: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.hf-btn.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+}
+
+/* ── Список игр ── */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--card);
+    border-radius: 10px;
+    border-left: 3px solid var(--green);
+    transition: opacity 0.15s;
+}
+
+.history-item.lost {
+    border-left-color: var(--red);
+}
+
+.hi-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.hi-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.hi-game {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hi-time {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+}
+
+.hi-result {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.hi-mult {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.hi-amount {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 1px;
+}
+
+.hi-amount.win {
+    color: var(--green);
+}
+
+.hi-amount.lose {
+    color: var(--red);
+}
+
+/* ── Кнопка "Загрузить ещё" ── */
+.history-load-more {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.history-load-more:active {
+    opacity: 0.7;
+}
+
+/* ── Пустое состояние ── */
+.history-empty {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 32px 16px;
+}
+
+.history-empty-icon {
+    font-size: 36px;
+    margin-bottom: 10px;
+}
+
+/* ── Лоадер ── */
+.history-loading {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 24px;
+}

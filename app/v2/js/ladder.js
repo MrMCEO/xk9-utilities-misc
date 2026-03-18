@@ -7,6 +7,7 @@ import { fetchAPI }       from './api.js';
 import { openModal, closeModal, sndClick, sndWin, sndLose, sndStep, sndHit, sndBet, haptic, hNotify, pushHistory } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
 import { recordGame } from './session-stats.js';
+import { addLocalHistory } from './history.js';
 
 const LD_PLATFORMS = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 10];
 const LD_ROWS      = 12;
@@ -273,6 +274,7 @@ function ldGameOver() {
     LD.locked = false;
     changeBalance(-LD.bet);
     recordGame(false, -LD.bet);
+    addLocalHistory({ game_type: 'ladder', stake: LD.bet, won: false, multiplier: LD.mult, winnings: 0, wallet: activeWallet });
     hNotify('error');
     const rowReached = LD.currentRow + 1;
     pushHistory(lHistData, 'lHistory', false, '💥 r' + rowReached);
@@ -289,6 +291,7 @@ function ldWin(topReached) {
     const profit = total - LD.bet;
     changeBalance(profit);
     recordGame(true, profit);
+    addLocalHistory({ game_type: 'ladder', stake: LD.bet, won: true, multiplier: LD.mult, winnings: total, wallet: activeWallet });
     hNotify('success');
     ldCelebratePlayer();
     const sub = topReached

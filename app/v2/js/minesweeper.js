@@ -7,6 +7,7 @@ import { fetchAPI }       from './api.js';
 import { openModal, closeModal, sndClick, sndWin, sndLose, sndPop, sndBoom, sndBet, haptic, pushHistory } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
 import { recordGame } from './session-stats.js';
+import { addLocalHistory } from './history.js';
 
 const CELLS = 36;
 
@@ -209,6 +210,7 @@ async function mGameOver(hitIdx, mineList) {
 
     changeBalance(-Mine.bet);
     recordGame(false, -Mine.bet);
+    addLocalHistory({ game_type: 'minesweeper', stake: Mine.bet, won: false, multiplier: 0, winnings: 0, wallet: activeWallet });
 
     setTimeout(() => {
         pushHistory(mHistData, 'mHistory', false, '💣 -' + fmtFull(Mine.bet));
@@ -239,6 +241,7 @@ async function mCashout() {
 
         changeBalance(profit);
         recordGame(true, profit);
+        addLocalHistory({ game_type: 'minesweeper', stake: Mine.bet, won: true, multiplier: finalMult, winnings: total, wallet: activeWallet });
         pushHistory(mHistData, 'mHistory', true, '💎 x' + finalMult.toFixed(2));
         sndWin();
         openModal('💎', 'Выигрыш!', 'x' + finalMult.toFixed(2) + ' · Открыто: ' + Mine.safe.size, '+' + fmtFull(profit), true);

@@ -7,6 +7,7 @@ import { fetchAPI }        from './api.js';
 import { openModal, closeModal, sndClick, sndWin, sndLose, sndBet, sndMilestone, haptic } from './ui.js';
 import { changeBalance, getActiveBalance, activeWallet, fmtFull, fmtShort, fmtDonate } from './balance.js';
 import { recordGame } from './session-stats.js';
+import { addLocalHistory } from './history.js';
 
 /* ── Авто-кэшаут ── */
 let rAutoCashoutTarget = 0;
@@ -313,6 +314,7 @@ async function rCashout(isAuto = false) {
             sndWin();
             changeBalance(profit);
             recordGame(true, profit);
+            addLocalHistory({ game_type: 'rocket', stake: R.bet, won: true, multiplier: finalMult, winnings: total, wallet: activeWallet });
             R.els.hint.textContent = '✅ Забрали ' + fmtFull(total);
             R.els.mult.textContent = 'x' + finalMult.toFixed(2);
             const modalTitle = isAuto
@@ -352,6 +354,7 @@ function rCrashVisual(elapsed) {
     sndLose();
     changeBalance(-R.bet);
     recordGame(false, -R.bet);
+    addLocalHistory({ game_type: 'rocket', stake: R.bet, won: false, multiplier: R.crashAt, winnings: 0, wallet: activeWallet });
     rDraw(elapsed, true);
     R.els.mult.classList.add('crashed');
     R.els.mult.textContent = 'x' + R.crashAt.toFixed(2);
