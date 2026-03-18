@@ -30,6 +30,10 @@ const ERROR_MAP = {
  * @throws {Error} — если статус ответа не 2xx (с пользовательским сообщением)
  */
 export async function fetchAPI(path, body = {}) {
+    // Dev-режим: использовать мок вместо реального fetch
+    if (window.DEV_MODE && window.mockFetchAPI) {
+        return window.mockFetchAPI(path, body);
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 сек
     try {

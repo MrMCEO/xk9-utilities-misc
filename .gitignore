@@ -2,6 +2,9 @@
 bot/.env
 server/.env
 
+# Dev-мок (только для локального тестирования)
+app/v2/js/dev-mock.js
+
 # Node.js
 server/node_modules/
 

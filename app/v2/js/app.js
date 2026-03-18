@@ -4,6 +4,11 @@
  * привязывает ripple-эффекты и запускает все игровые модули.
  */
 
+// Dev-режим: если нет Telegram — подключить моки
+if (!window.Telegram?.WebApp?.initData) {
+    import('./dev-mock.js');
+}
+
 import { renderBalances, setActiveWallet, activeWallet, initBalanceFromUrl, initDonateFromUrl } from './balance.js';
 import { applyRipples, initModalBindings, haptic, openModal } from './ui.js';
 import { initDeposit }  from './deposit.js';
@@ -19,8 +24,20 @@ function isAnyGameActive() {
     return isRocketActive() || isMineActive() || isLadderActive();
 }
 
-/* MP Краш подключается только если присутствует экран */
-if (document.getElementById('screenCrashMp')) {
+/* ════════════════════════════════════
+   WS URL ДЛЯ МУЛЬТИПЛЕЕРНОГО КРАША
+════════════════════════════════════ */
+if (!window.MP_CRASH_WS_URL) {
+    const proto   = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiHost = window.API_URL ? new URL(window.API_URL).host : location.host;
+    window.MP_CRASH_WS_URL = `${proto}//${apiHost}/ws/crash`;
+}
+
+/* MP Краш — инициализируется один раз при наличии экрана */
+let _mpCrashInit = false;
+function ensureMpCrashInit() {
+    if (_mpCrashInit) return;
+    _mpCrashInit = true;
     import('./crash-mp.js').then(m => m.initCrashMp());
 }
 
@@ -58,9 +75,10 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 ════════════════════════════════════ */
 let curTab = 'rocket';
 const tabMap = {
-    rocket: 'screenRocket',
-    mine:   'screenMine',
-    ladder: 'screenLadder',
+    rocket:   'screenRocket',
+    mine:     'screenMine',
+    ladder:   'screenLadder',
+    'crash-mp': 'screenCrashMp',
 };
 
 /* Объект-обёртка для передачи curTab по ссылке в admin.js */
@@ -88,6 +106,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.add('active');
         btn.setAttribute('aria-selected', 'true');
         document.getElementById(tabMap[tab])?.classList.add('active');
+
+        /* Подключить мультиплеерный краш при первом переходе на таб */
+        if (tab === 'crash-mp') ensureMpCrashInit();
+
         haptic('light');
     });
 });
