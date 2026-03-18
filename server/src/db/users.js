@@ -137,6 +137,37 @@ function isUserBanned(telegramId) {
   return row ? Boolean(row.is_banned) : false;
 }
 
+/**
+ * Топ игроков по балансу (без заблокированных, без приватных данных).
+ * Возвращает массив { id, name, balance }.
+ */
+function getLeaderboard(limit = 20) {
+  return getDb().prepare(
+    `SELECT telegram_id as id, first_name as name, balance
+     FROM users WHERE is_banned=0
+     ORDER BY balance DESC LIMIT ?`
+  ).all(limit);
+}
+
+/**
+ * Топ игроков по суммарному выигрышу за всё время.
+ * Возвращает массив { user_id, name, total_won, games, wins }.
+ */
+function getTopWinners(limit = 20) {
+  return getDb().prepare(
+    `SELECT g.telegram_id as user_id,
+            u.first_name as name,
+            COALESCE(SUM(CASE WHEN g.result='win' THEN g.winnings ELSE 0 END), 0) as total_won,
+            COUNT(*) as games,
+            SUM(CASE WHEN g.result='win' THEN 1 ELSE 0 END) as wins
+     FROM games g
+     JOIN users u ON g.telegram_id = u.telegram_id
+     WHERE u.is_banned = 0
+     GROUP BY g.telegram_id
+     ORDER BY total_won DESC LIMIT ?`
+  ).all(limit);
+}
+
 module.exports = {
   getOrCreateUser,
   getUser,
@@ -151,4 +182,6 @@ module.exports = {
   getAllUsers,
   banUser,
   isUserBanned,
+  getLeaderboard,
+  getTopWinners,
 };

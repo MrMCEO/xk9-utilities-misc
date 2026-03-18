@@ -11,8 +11,10 @@ if (!window.Telegram?.WebApp?.initData) {
 
 import { renderBalances, setActiveWallet, activeWallet, initBalanceFromUrl, initDonateFromUrl } from './balance.js';
 import { applyRipples, initModalBindings, haptic, openModal } from './ui.js';
-import { initDeposit }  from './deposit.js';
-import { initAdmin }    from './admin.js';
+import { initDeposit }     from './deposit.js';
+import { initAdmin }       from './admin.js';
+import { loadHistory }     from './history.js';
+import { loadLeaderboard } from './leaderboard.js';
 
 /* Импортируем игровые модули для их side-effect инициализации */
 import { isRocketActive } from './rocket.js';
@@ -75,10 +77,12 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 ════════════════════════════════════ */
 let curTab = 'rocket';
 const tabMap = {
-    rocket:   'screenRocket',
-    mine:     'screenMine',
-    ladder:   'screenLadder',
-    'crash-mp': 'screenCrashMp',
+    rocket:       'screenRocket',
+    mine:         'screenMine',
+    ladder:       'screenLadder',
+    'crash-mp':   'screenCrashMp',
+    history:      'screenHistory',
+    leaderboard:  'screenLeaderboard',
 };
 
 /* Объект-обёртка для передачи curTab по ссылке в admin.js */
@@ -109,6 +113,12 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
         /* Подключить мультиплеерный краш при первом переходе на таб */
         if (tab === 'crash-mp') ensureMpCrashInit();
+
+        /* Загрузить историю ставок при переходе на вкладку */
+        if (tab === 'history') loadHistory();
+
+        /* Загрузить лидерборд при переходе на вкладку */
+        if (tab === 'leaderboard') loadLeaderboard();
 
         haptic('light');
     });

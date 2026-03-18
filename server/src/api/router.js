@@ -1,5 +1,7 @@
 'use strict';
 
+const path = require('path');
+const fs = require('fs');
 const { verifyInitData } = require('./auth');
 const { isUserBanned } = require('../db/users');
 const { getMaintenance } = require('../db/settings');
@@ -7,6 +9,64 @@ const { ADMIN_IDS } = require('../config');
 const rocketEngine = require('../games/rocket-engine');
 const mineEngine = require('../games/minesweeper-engine');
 const ladderEngine = require('../games/ladder-engine');
+const { getUserHistory } = require('../db/games');
+const { getLeaderboard, getTopWinners } = require('../db/users');
+
+// Корень проекта (server/../app)
+const STATIC_ROOT = path.resolve(__dirname, '..', '..', '..', 'app');
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.webp': 'image/webp',
+};
+
+/**
+ * Раздача статических файлов из app/.
+ * Возвращает true если файл найден и отдан, false иначе.
+ */
+function serveStatic(req, res, urlPath) {
+  // Только GET
+  if (req.method !== 'GET') return false;
+  // Только пути начинающиеся с /app/
+  if (!urlPath.startsWith('/app/')) return false;
+
+  const relPath = urlPath.replace(/^\/app\//, '');
+  const filePath = path.resolve(STATIC_ROOT, relPath);
+
+  // Защита от path traversal
+  if (!filePath.startsWith(STATIC_ROOT)) return false;
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = MIME_TYPES[ext] || 'application/octet-stream';
+
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Content-Length': stat.size,
+      'Cache-Control': 'public, max-age=300',
+      ...corsHeaders(),
+    });
+    fs.createReadStream(filePath).pipe(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const MAX_STAKE = 10_000_000;
 
@@ -83,9 +143,73 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Статические файлы (app/v2/*)
+  if (serveStatic(req, res, url)) return;
+
   // Health check
   if (url === '/health' && method === 'GET') {
     json(res, { ok: true, ts: Date.now() });
+    return;
+  }
+
+  // ===== History API =====
+  if (url === '/api/history' && method === 'GET') {
+    const initData = req.headers['x-init-data'] || '';
+    const user = verifyInitData(initData);
+    if (!user) { json(res, { ok: false, error: 'unauthorized' }, 401); return; }
+    const qp = new URLSearchParams(req.url.split('?')[1] || '');
+    const limit  = Math.min(Math.max(parseInt(qp.get('limit')  || '50', 10),  1), 100);
+    const offset = Math.max(parseInt(qp.get('offset') || '0',  10), 0);
+    const { games, total } = getUserHistory(user.id, limit, offset);
+    // Нормализуем поля: result -> won (boolean), добавляем wallet=null для совместимости
+    const normalized = games.map(g => ({
+      id:         g.id,
+      game_type:  g.game_type,
+      stake:      g.stake,
+      won:        g.result === 'win',
+      multiplier: g.multiplier,
+      winnings:   g.winnings,
+      wallet:     null,
+      created_at: g.created_at,
+    }));
+    json(res, { ok: true, games: normalized, total });
+    return;
+  }
+
+  // ===== Leaderboard API =====
+  if (url === '/api/leaderboard' && method === 'GET') {
+    const initData = req.headers['x-init-data'] || '';
+    const user = verifyInitData(initData);
+    if (!user) { json(res, { ok: false, error: 'unauthorized' }, 401); return; }
+
+    const byBalanceRaw = getLeaderboard(20);
+    const byWinningsRaw = getTopWinners(20);
+
+    const byBalance = byBalanceRaw.map((row, i) => ({
+      rank: i + 1,
+      name: row.name || 'Игрок',
+      balance: row.balance,
+      isYou: row.id === user.id,
+    }));
+
+    const byWinnings = byWinningsRaw.map((row, i) => ({
+      rank: i + 1,
+      name: row.name || 'Игрок',
+      totalWon: row.total_won,
+      games: row.games,
+      wins: row.wins,
+      isYou: row.user_id === user.id,
+    }));
+
+    // Позиция текущего пользователя
+    const balIdx = byBalanceRaw.findIndex(r => r.id === user.id);
+    const winIdx = byWinningsRaw.findIndex(r => r.user_id === user.id);
+    const yourRank = {
+      byBalance: balIdx >= 0 ? balIdx + 1 : null,
+      byWinnings: winIdx >= 0 ? winIdx + 1 : null,
+    };
+
+    json(res, { ok: true, byBalance, byWinnings, yourRank });
     return;
   }
 

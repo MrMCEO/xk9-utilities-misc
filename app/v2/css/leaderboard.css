@@ -1,0 +1,83 @@
+.lb-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.lb-tab {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+.lb-tab.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+}
+
+.lb-your-rank {
+    padding: 10px 12px;
+    background: linear-gradient(135deg, var(--brand), #7c4dff);
+    border-radius: 10px;
+    color: #fff;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.lb-your-rank .rank-num { font-size: 24px; font-weight: 800; }
+.lb-your-rank .rank-label { font-size: 11px; opacity: 0.8; }
+
+.lb-list { display: flex; flex-direction: column; gap: 4px; }
+
+.lb-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--card);
+    border-radius: 8px;
+    transition: background 0.15s;
+}
+.lb-row.you {
+    background: color-mix(in srgb, var(--brand) 15%, var(--card));
+    border: 1px solid var(--brand);
+}
+.lb-row.top1 { border-left: 3px solid gold; }
+.lb-row.top2 { border-left: 3px solid silver; }
+.lb-row.top3 { border-left: 3px solid #cd7f32; }
+
+.lb-rank {
+    width: 28px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.lb-rank.top1 { color: gold; }
+.lb-rank.top2 { color: silver; }
+.lb-rank.top3 { color: #cd7f32; }
+
+.lb-name { flex: 1; font-size: 13px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-value { font-size: 13px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+.lb-extra { font-size: 10px; color: var(--muted); display: block; }
+
+.lb-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.lb-loading {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--muted);
+    font-size: 13px;
+}
