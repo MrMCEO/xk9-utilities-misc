@@ -91,38 +91,97 @@ const curTabRef = {
     set value(v) { curTab = v; }
 };
 
+/** Единая функция переключения вкладки */
+function switchTab(tab) {
+    if (tab === curTab) return;
+
+    /* Предупреждение при активной игре */
+    if (isAnyGameActive()) {
+        openModal('⚠️', 'Внимание', 'У вас активная игра! Переключение вкладки не остановит её.', '', null);
+    }
+
+    /* Скрыть текущий экран */
+    document.getElementById(tabMap[curTab])?.classList.remove('active');
+
+    /* Обновить состояние старых tab-btn (для обратной совместимости) */
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+    });
+    const oldTabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+    if (oldTabBtn) {
+        oldTabBtn.classList.add('active');
+        oldTabBtn.setAttribute('aria-selected', 'true');
+    }
+
+    /* Обновить активный пункт бокового меню */
+    document.querySelectorAll('.sidebar-item[data-tab]').forEach(b => b.classList.remove('active'));
+    const sidebarItem = document.querySelector(`.sidebar-item[data-tab="${tab}"]`);
+    if (sidebarItem) sidebarItem.classList.add('active');
+
+    curTab = tab;
+
+    /* Показать новый экран */
+    document.getElementById(tabMap[tab])?.classList.add('active');
+
+    /* Подключить мультиплеерный краш при первом переходе */
+    if (tab === 'crash-mp') ensureMpCrashInit();
+
+    /* Загрузить историю ставок при переходе на вкладку */
+    if (tab === 'history') loadHistory();
+
+    /* Загрузить лидерборд при переходе на вкладку */
+    if (tab === 'leaderboard') loadLeaderboard();
+
+    haptic('light');
+}
+
+/* Старые tab-btn — работают через switchTab */
 document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+/* ════════════════════════════════════
+   БУРГЕР-МЕНЮ
+════════════════════════════════════ */
+const burgerBtn       = document.getElementById('burgerBtn');
+const sidebar         = document.getElementById('sidebar');
+const sidebarOverlay  = document.getElementById('sidebarOverlay');
+const sidebarClose    = document.getElementById('sidebarClose');
+
+function openSidebar() {
+    sidebar.classList.add('open');
+    sidebarOverlay.classList.add('open');
+}
+function closeSidebar() {
+    sidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('open');
+}
+
+burgerBtn?.addEventListener('click', openSidebar);
+sidebarClose?.addEventListener('click', closeSidebar);
+sidebarOverlay?.addEventListener('click', closeSidebar);
+
+/* Выбор вкладки из бокового меню */
+document.querySelectorAll('.sidebar-item[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        if (tab === curTab) return;
-
-        /* Предупреждение при активной игре */
-        if (isAnyGameActive()) {
-            openModal('⚠️', 'Внимание', 'У вас активная игра! Переключение вкладки не остановит её.', '', null);
-        }
-
-        document.getElementById(tabMap[curTab])?.classList.remove('active');
-        document.querySelectorAll('.tab-btn').forEach(b => {
-            b.classList.remove('active');
-            b.setAttribute('aria-selected', 'false');
-        });
-        curTab = tab;
-        btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
-        document.getElementById(tabMap[tab])?.classList.add('active');
-
-        /* Подключить мультиплеерный краш при первом переходе на таб */
-        if (tab === 'crash-mp') ensureMpCrashInit();
-
-        /* Загрузить историю ставок при переходе на вкладку */
-        if (tab === 'history') loadHistory();
-
-        /* Загрузить лидерборд при переходе на вкладку */
-        if (tab === 'leaderboard') loadLeaderboard();
-
-        haptic('light');
+        switchTab(btn.dataset.tab);
+        closeSidebar();
     });
 });
+
+/* Свайп для открытия/закрытия меню */
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+    const diff = e.changedTouches[0].clientX - touchStartX;
+    /* Свайп вправо от левого края → открыть меню */
+    if (touchStartX < 30 && diff > 60) openSidebar();
+    /* Свайп влево при открытом меню → закрыть */
+    if (sidebar.classList.contains('open') && diff < -60) closeSidebar();
+}, { passive: true });
 
 /* ════════════════════════════════════
    КОШЕЛЁК — клики на все тогглы

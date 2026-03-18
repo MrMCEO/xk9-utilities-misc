@@ -22,6 +22,7 @@
 
 <!-- HEADER -->
 <header class="header">
+    <button class="burger-btn" id="burgerBtn" aria-label="Меню">☰</button>
     <div class="logo">BFG</div>
     <div class="header-right">
         <div class="balance-block-wrap">
@@ -40,7 +41,7 @@
     </div>
 </header>
 
-<!-- TABS -->
+<!-- TABS (скрыт через CSS, оставлен для обратной совместимости) -->
 <div class="tab-bar" role="tablist">
     <button class="tab-btn active" data-tab="rocket" role="tab" aria-selected="true"  aria-controls="screenRocket"><span class="ti">🚀</span> Ракета</button>
     <button class="tab-btn"        data-tab="mine"   role="tab" aria-selected="false" aria-controls="screenMine">  <span class="ti">💣</span> Сапер</button>
@@ -49,6 +50,44 @@
     <button class="tab-btn"        data-tab="history"     role="tab" aria-selected="false" aria-controls="screenHistory">    <span class="ti">📋</span> История</button>
     <button class="tab-btn"        data-tab="leaderboard" role="tab" aria-selected="false" aria-controls="screenLeaderboard"><span class="ti">🏆</span> Топ</button>
 </div>
+
+<!-- Оверлей -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- Боковое меню -->
+<nav class="sidebar" id="sidebar" aria-label="Навигация">
+    <div class="sidebar-header">
+        <span class="sidebar-logo">BFG Casino</span>
+        <button class="sidebar-close" id="sidebarClose" aria-label="Закрыть меню">✕</button>
+    </div>
+    <div class="sidebar-nav">
+        <button class="sidebar-item active" data-tab="rocket">
+            <span class="si-icon">🚀</span>
+            <span class="si-text">Ракета</span>
+        </button>
+        <button class="sidebar-item" data-tab="mine">
+            <span class="si-icon">💣</span>
+            <span class="si-text">Сапёр</span>
+        </button>
+        <button class="sidebar-item" data-tab="ladder">
+            <span class="si-icon">🪜</span>
+            <span class="si-text">Лесенка</span>
+        </button>
+        <button class="sidebar-item" data-tab="crash-mp">
+            <span class="si-icon">🌐</span>
+            <span class="si-text">Онлайн</span>
+        </button>
+        <div class="sidebar-divider"></div>
+        <button class="sidebar-item" data-tab="history">
+            <span class="si-icon">📋</span>
+            <span class="si-text">История</span>
+        </button>
+        <button class="sidebar-item" data-tab="leaderboard">
+            <span class="si-icon">🏆</span>
+            <span class="si-text">Топ игроков</span>
+        </button>
+    </div>
+</nav>
 
 <!-- SESSION STATS -->
 <div class="session-stats" id="sessionStats">

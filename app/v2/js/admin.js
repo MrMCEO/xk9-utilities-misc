@@ -51,6 +51,11 @@ export function initAdmin(curTabRef, tabMap) {
         document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.toggle('active', b.dataset.tab === prevTab);
         });
+        /* Восстановить активный пункт бокового меню */
+        const activeTab = prevTab || 'rocket';
+        document.querySelectorAll('.sidebar-item[data-tab]').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === activeTab);
+        });
         haptic('light');
     }
 
