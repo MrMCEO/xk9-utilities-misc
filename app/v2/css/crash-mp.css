@@ -2,10 +2,10 @@
    CRASH MULTIPLAYER — стили экрана и элементов
 ═══════════════════════════════════════════════════ */
 
-/* Экран заглушка — добавьте реальные стили при реализации UI */
+/* Canvas-сцена — график мультиплеера */
 #screenCrashMp .crash-mp-stage {
     position:relative;
-    height:clamp(160px, 28vh, 220px);
+    height:clamp(180px, 32vh, 260px);
     border-radius:var(--r-lg);
     background:var(--card);
     border:1px solid var(--border);
@@ -15,7 +15,8 @@
     contain:layout style;
 }
 
-#screenCrashMp .crash-mp-canvas {
+#screenCrashMp .crash-mp-canvas,
+#mpCanvas {
     position:absolute; inset:0;
     width:100%; height:100%;
     display:block;
