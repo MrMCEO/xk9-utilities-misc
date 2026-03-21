@@ -84,8 +84,9 @@ function mUpdateStats() {
     if (chip) chip.classList.toggle('mult-high', Mine.mult >= 3);
 }
 
-function mUpdateNext() {
-    document.getElementById('mNextVal').textContent = 'x' + mCalcMult(Mine.safe.size + 1).toFixed(2);
+function mUpdateNext(nextMultiplier) {
+    const val = nextMultiplier ?? mCalcMult(Mine.safe.size + 1);
+    document.getElementById('mNextVal').textContent = 'x' + val.toFixed(2);
 }
 
 /* ── Старт игры ── */
@@ -176,7 +177,7 @@ async function mTap(idx) {
             haptic('light');
             Mine.mult = data.multiplier ?? mCalcMult(Mine.safe.size);
             mUpdateStats();
-            mUpdateNext();
+            mUpdateNext(data.nextMultiplier);
             document.getElementById('mGrid').classList.add('playing');
 
             if (Mine.safe.size >= CELLS - Mine.mineCount) {

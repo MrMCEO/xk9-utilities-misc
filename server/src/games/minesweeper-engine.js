@@ -23,18 +23,18 @@ function placeMines(mineCount) {
 
 /**
  * Множитель по количеству открытых клеток.
- * Формула: (1 / prob) * 0.97, где prob = вероятность не нажать мину.
- * @param {number} opened — открыто ячеек
+ * Формула: (1 / prob) * 0.97, где prob = P(открыть opened безопасных клеток подряд).
+ * @param {number} totalCells — всего клеток (36)
  * @param {number} mineCount — количество мин
+ * @param {number} openedCount — открыто безопасных клеток
  */
-function calcMultiplier(opened, mineCount) {
-  if (opened === 0) return 1.0;
-  const safe = GRID_SIZE - mineCount;
+function calcMultiplier(totalCells, mineCount, openedCount) {
+  if (openedCount === 0) return 1.0;
   let prob = 1.0;
-  for (let i = 0; i < opened; i++) {
-    prob *= (safe - i) / (GRID_SIZE - i);
+  for (let i = 0; i < openedCount; i++) {
+    prob *= (totalCells - mineCount - i) / (totalCells - i);
   }
-  return Math.round((1 / prob) * 0.97 * 100) / 100;
+  return parseFloat(((1 / prob) * 0.97).toFixed(4));
 }
 
 /**
@@ -107,8 +107,9 @@ function tap(sessionId, cellIndex, userId) {
   const newOpened = [...session.opened, cellIndex];
   updateSession(sessionId, { opened: newOpened });
 
-  const multiplier = calcMultiplier(newOpened.length, session.mineCount);
-  return { ok: true, hit: false, multiplier, opened: newOpened };
+  const multiplier = calcMultiplier(GRID_SIZE, session.mineCount, newOpened.length);
+  const nextMultiplier = calcMultiplier(GRID_SIZE, session.mineCount, newOpened.length + 1);
+  return { ok: true, hit: false, multiplier, nextMultiplier, opened: newOpened };
 }
 
 /**
@@ -137,7 +138,7 @@ function cashout(sessionId, userId) {
     return { ok: true, multiplier: 1.0, winnings: session.stake, balance: newBalance };
   }
 
-  const multiplier = calcMultiplier(session.opened.length, session.mineCount);
+  const multiplier = calcMultiplier(GRID_SIZE, session.mineCount, session.opened.length);
   const winnings = Math.round(session.stake * multiplier * 100) / 100;
   const useDonate = session.wallet === 'donate';
 
