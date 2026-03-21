@@ -277,6 +277,16 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // POST /api/rocket/check — polling состояния (crashed: true/false, multiplier без crashAt до краша)
+  if (url === '/api/rocket/check' && method === 'POST') {
+    const body = await parseBody(req);
+    const user = verifyInitData(getInitData(req, body));
+    if (!user) { json(res, { ok: false, error: 'unauthorized' }, 401); return; }
+    const result = rocketEngine.check(body.sessionId || '', user.id);
+    json(res, result, result.ok ? 200 : 400);
+    return;
+  }
+
   // ===== Minesweeper API =====
   if (url === '/api/minesweeper/start' && method === 'POST') {
     const body = await parseBody(req);

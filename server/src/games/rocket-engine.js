@@ -113,4 +113,45 @@ function forceEnd(sessionId, crashAt) {
   deleteSession(sessionId);
 }
 
-module.exports = { start, cashout, forceEnd, calcMultiplier };
+/**
+ * Проверить состояние сессии ракеты (для polling с клиента).
+ * Сервер знает crashAt и startTime, вычисляет текущий множитель по серверному времени.
+ * Если множитель >= crashAt — возвращает crashed: true.
+ * crashAt НЕ раскрывается клиенту до момента краша.
+ */
+function check(sessionId, userId) {
+  const session = getSession(sessionId);
+  if (!session || session.userId !== userId) {
+    return { ok: false, error: 'session_not_found' };
+  }
+  if (session.cashedOut) {
+    return { ok: true, crashed: false, cashedOut: true };
+  }
+
+  // Вычислить текущий множитель по серверному времени
+  let elapsed = (Date.now() - session.startTime) / 1000;
+  if (elapsed < 0) elapsed = 0;
+  const currentMult = Math.min(MAX_MULTIPLIER, calcMultiplier(elapsed));
+
+  if (currentMult >= session.crashAt) {
+    // Краш произошёл — записать проигрыш и удалить сессию
+    const crashedAt = parseFloat(session.crashAt.toFixed(2));
+    addGame(session.userId, 'rocket', session.stake, 'lose', 0, crashedAt);
+    deleteSession(sessionId);
+
+    return {
+      ok: true,
+      crashed: true,
+      crashedAt,
+      multiplier: crashedAt,
+    };
+  }
+
+  return {
+    ok: true,
+    crashed: false,
+    multiplier: parseFloat(currentMult.toFixed(2)),
+  };
+}
+
+module.exports = { start, cashout, forceEnd, calcMultiplier, check };

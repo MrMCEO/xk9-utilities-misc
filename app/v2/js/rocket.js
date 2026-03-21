@@ -12,6 +12,39 @@ import { addLocalHistory } from './history.js';
 /* ── Авто-кэшаут ── */
 let rAutoCashoutTarget = 0;
 
+/* ── Polling состояния краша ── */
+let rCheckInterval = null;
+
+function rStopPolling() {
+    if (rCheckInterval !== null) {
+        clearInterval(rCheckInterval);
+        rCheckInterval = null;
+    }
+}
+
+function rStartPolling() {
+    rStopPolling();
+    rCheckInterval = setInterval(async () => {
+        if (!R.active || R.cashedOut) { rStopPolling(); return; }
+        try {
+            const data = await fetchAPI('/api/rocket/check', { sessionId: R.sessionId });
+            if (data.crashed) {
+                rStopPolling();
+                // Предотвратить повторный cashout
+                R.cashedOut = true;
+                R.active = false;
+                cancelAnimationFrame(R.frame);
+                R.crashAt = data.crashedAt;
+                R.mult    = data.crashedAt;
+                const elapsed = (Date.now() - R.t0) / 1000;
+                rCrashVisual(elapsed);
+            }
+        } catch {
+            // Игнорируем ошибки polling — краш будет обнаружен при следующем тике
+        }
+    }, 200);
+}
+
 /* ── Ссылки на DOM-элементы ── */
 const R = {
     active: false, cashedOut: false,
@@ -263,6 +296,7 @@ async function rStart() {
         haptic('medium');
 
         R.frame = requestAnimationFrame(rLoop);
+        rStartPolling();
 
     } catch(err) {
         R.els.btn.textContent   = origText;
@@ -277,6 +311,7 @@ async function rStart() {
 async function rCashout(isAuto = false) {
     if (!R.active || R.cashedOut) return;
     R.cashedOut = true;
+    rStopPolling();
     // НЕ останавливаем анимацию здесь — блокируем только кнопку
     R.els.btn.disabled = true;
 
@@ -325,17 +360,19 @@ async function rCashout(isAuto = false) {
         }
 
     } catch(err) {
-        /* Сеть пропала — откатываем состояние */
+        /* Сеть пропала — откатываем состояние и возобновляем polling */
         R.cashedOut = false;
         R.active    = true;
         R.els.btn.disabled = false;
         openModal('⚠️', 'Ошибка', 'Не удалось забрать выигрыш', err.message || 'Проблема с сетью', null);
         R.frame = requestAnimationFrame(rLoop);
+        rStartPolling();
     }
 }
 
-/* ── Локальный краш (сервер прислал crash_at через rLoop) ── */
+/* ── Локальный краш (вызывается при обнаружении краша через polling) ── */
 function rCrash() {
+    rStopPolling();
     cancelAnimationFrame(R.frame);
     R.active = false;
     const elapsed = (Date.now() - R.t0) / 1000;
