@@ -75,10 +75,14 @@ function serveStatic(req, res, urlPath) {
 
 const MAX_STAKE = 10_000_000;
 
-/* ── Rate limiter: максимум 60 запросов в минуту на IP ── */
+/* ── Rate limiter: максимум N запросов в минуту на IP ── */
 const _rateLimitMap = new Map(); // ip -> { count, resetAt }
-const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_MAX = 60;          // обычные API-запросы
+const RATE_LIMIT_CHECK = 400;       // /api/rocket/check — polling 200ms = ~300/мин, +запас
 const RATE_LIMIT_WINDOW = 60 * 1000;
+
+// Отдельный счётчик для polling-эндпоинтов
+const _rateLimitCheckMap = new Map(); // ip -> { count, resetAt }
 
 // Очистка устаревших записей каждые 5 минут
 setInterval(() => {
@@ -86,22 +90,37 @@ setInterval(() => {
   for (const [ip, entry] of _rateLimitMap) {
     if (now > entry.resetAt) _rateLimitMap.delete(ip);
   }
+  for (const [ip, entry] of _rateLimitCheckMap) {
+    if (now > entry.resetAt) _rateLimitCheckMap.delete(ip);
+  }
 }, 5 * 60 * 1000).unref();
 
 /**
- * Проверить rate limit для IP. Возвращает true если лимит не превышен, false — если превышен.
+ * Проверить rate limit для IP.
+ * @param {object} req - HTTP запрос
+ * @param {Map} map - счётчик (обычный или для polling)
+ * @param {number} max - максимум запросов в окне
+ * Возвращает true если лимит не превышен, false — если превышен.
  */
-function checkRateLimit(req) {
+function _checkRateLimitMap(req, map, max) {
   const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
   const now = Date.now();
-  const entry = _rateLimitMap.get(ip);
+  const entry = map.get(ip);
   if (!entry || now > entry.resetAt) {
-    _rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+    map.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
     return true;
   }
   entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) return false;
+  if (entry.count > max) return false;
   return true;
+}
+
+function checkRateLimit(req) {
+  return _checkRateLimitMap(req, _rateLimitMap, RATE_LIMIT_MAX);
+}
+
+function checkRateLimitCheck(req) {
+  return _checkRateLimitMap(req, _rateLimitCheckMap, RATE_LIMIT_CHECK);
 }
 
 /**
@@ -187,7 +206,13 @@ async function handleRequest(req, res) {
   }
 
   // Rate limiting — только для API-запросов
-  if (url.startsWith('/api/') && !checkRateLimit(req)) {
+  // /api/rocket/check — polling 200ms, отдельный высокий лимит (400/мин)
+  if (url === '/api/rocket/check') {
+    if (!checkRateLimitCheck(req)) {
+      json(res, { ok: false, error: 'rate_limited' }, 429);
+      return;
+    }
+  } else if (url.startsWith('/api/') && !checkRateLimit(req)) {
     json(res, { ok: false, error: 'rate_limited' }, 429);
     return;
   }
