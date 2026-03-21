@@ -38,7 +38,6 @@ const LDel = {
     get cashout()  { return document.getElementById('lCashoutBtn'); },
     get settings()    { return document.getElementById('lSettings'); },
     get panel()       { return document.getElementById('lGamePanel'); },
-    get stoneInput()  { return document.getElementById('lStoneInput'); },
 };
 
 /* ── Расчёт множителей ── */
@@ -434,23 +433,7 @@ document.querySelectorAll('.stone-opt').forEach(btn => {
         btn.classList.add('sel');
         LD.stones = parseInt(btn.dataset.s);
         LDel.badge.textContent = LD.stones;
-        if (LDel.stoneInput) LDel.stoneInput.value = LD.stones;
         haptic('light');
-    });
-});
-
-/* ── Ручной ввод количества камней ── */
-document.getElementById('lStoneInput').addEventListener('input', function() {
-    if (LD.active) return;
-    let v = parseInt(this.value);
-    if (isNaN(v) || v < 1) v = 1;
-    if (v > 7) v = 7;
-    this.value = v;
-    LD.stones = v;
-    LDel.badge.textContent = v;
-    document.querySelectorAll('.stone-opt').forEach(b => {
-        if (parseInt(b.dataset.s) === v) b.classList.add('sel');
-        else b.classList.remove('sel');
     });
 });
 
@@ -472,7 +455,6 @@ document.getElementById('lSettings').querySelectorAll('.qb').forEach(b => {
             const v = parseInt(stones);
             LD.stones = v;
             LDel.badge.textContent = v;
-            if (LDel.stoneInput) LDel.stoneInput.value = v;
             document.querySelectorAll('.stone-opt').forEach(b => {
                 b.classList.toggle('sel', parseInt(b.dataset.s) === v);
             });
